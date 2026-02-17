@@ -30,16 +30,26 @@ stars.txtは約4億文字のSKI式。直接実行は非現実的だが、
    - revert(e): unbracketを試し、成功→λx.revert(e')、失敗→再帰的にrevert
 
 4. **Step 4: 構造分離**
-   - LEFT (デコーダー) と RIGHT (データ) を分離
-   - reference.mdの分析: LEFT ~152K文字, RIGHT ~30.3M文字
+   - トップレベルの `(LEFT RIGHT)` を分離
+   - LEFT (~152K文字): 上位適用器 `((S X)(K Y))` — RIGHTに適用して `X RIGHT Y` を生成
+   - RIGHT (~30.3M文字): `((B^6 H) DATA_CHAIN)` — メインプログラムH + データ
+   - さらにRIGHT内部を分離: H (デコーダープログラム, ~30M文字) と DATA_CHAIN (25アイテム, 307K文字)
 
 5. **Step 5: デコーダー部の復元**
+   - 対象: LEFT内のX/Y、およびRIGHT内のH（メインプログラム）
    - ラムダ式→元の言語の演算子を同定
-   - 既知の演算子のSKIパターンと照合（add, subtract, multiply, if, etc.）
+   - GMヒントで明示された復元対象:
+     - 真偽値 (true/false)
+     - 列/スタック (push/pop/empty_stack)
+     - 整数 (Scottエンコーディング、チャーチではない)
+     - 再帰 (recursive)
+     - 画像出力の5引数記号 (diamond)
+   - 加えて算術・比較・条件演算子 (add, subtract, multiply, equals, greater, if, etc.)
 
 6. **Step 6: データ部の解釈**
-   - データ部は画像データ（4096幅）
-   - デコーダーがデータを処理→最終出力
+   - GMヒント: 「データ部全体は画像データで暗号化されている」
+   - DATA_CHAINの25アイテムそれぞれの役割を特定（画像本体、鍵、ヘッダ、パラメータ等）
+   - デコーダープログラムがDATA_CHAINをどう処理するかを理解した上でデコード
 
 ## 実装の優先順位
 
