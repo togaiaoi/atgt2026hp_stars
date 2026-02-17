@@ -14,7 +14,12 @@
       "Bash(rustc --version:*)",
       "Bash(cargo:*)",
       "Bash(gcc:*)",
-      "Bash(rustup:*)"
+      "Bash(rustup:*)",
+      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" --version)",
+      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" install lazyk-rust)",
+      "Bash(\"$USERPROFILE/.cargo/bin/lazyk-rust\" --help)",
+      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" init --name ski-eval ski_eval_rs)",
+      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" build --release)"
     ]
   }
 }
