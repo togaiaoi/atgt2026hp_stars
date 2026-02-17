@@ -42,6 +42,10 @@ def split_application(s):
     """
     Split a compact string representing (LEFT RIGHT) into LEFT and RIGHT.
     The string is: LEFT_str + RIGHT_str + '-'
+
+    Uses reverse scanning: scan from right to find where RIGHT starts.
+    Reading backwards: leaf gives -1, '-' gives +1. When cumulative = -1,
+    we've found the start of the rightmost complete subtree (RIGHT).
     """
     if not s.endswith('-'):
         raise ValueError("String doesn't end with '-' (not an application)")
@@ -49,18 +53,21 @@ def split_application(s):
     # Remove the trailing '-' (top-level application marker)
     inner = s[:-1]
 
-    # Find the end of the first complete subtree (LEFT)
-    left_end = find_subtree_end(inner, 0)
+    # Scan from right to find the start of RIGHT
+    balance = 0
+    for i in range(len(inner) - 1, -1, -1):
+        c = inner[i]
+        if c in ('k', 'D', 'X'):
+            balance -= 1
+        elif c == '-':
+            balance += 1
 
-    left = inner[:left_end]
-    right = inner[left_end:]
+        if balance == -1:
+            left = inner[:i]
+            right = inner[i:]
+            return left, right
 
-    # Verify right is also a complete subtree
-    verify_end = find_subtree_end(right, 0)
-    if verify_end != len(right):
-        raise ValueError(f"RIGHT is not a single complete subtree (end={verify_end}, len={len(right)})")
-
-    return left, right
+    raise ValueError("Could not find split point")
 
 
 def count_leaves(s):
@@ -395,6 +402,67 @@ def decode_scott_list(s):
     return numbers
 
 
+def strip_b_wrapper(s):
+    """
+    Strip B^n composition wrapper: S(K(S(K(...V...)))) = kXkX...V--...--
+    Each B level is 'kX' prefix and '--' suffix.
+    Returns (n, inner_compact) where n is the B level and inner_compact is the unwrapped value.
+    """
+    n = 0
+    while s.startswith('kX') and s.endswith('--'):
+        # Check if stripping kX...-- gives a valid tree
+        candidate = s[2:-2]
+        # Verify it's a valid subtree
+        balance = 0
+        valid = True
+        for c in candidate:
+            if c in ('k', 'D', 'X'):
+                balance += 1
+            elif c == '-':
+                balance -= 1
+            if balance <= 0 and c == '-' and balance < 0:
+                # Would go negative, not valid to strip this level
+                valid = False
+                break
+        if valid and balance == 1:
+            s = candidate
+            n += 1
+        else:
+            break
+    return n, s
+
+
+def decode_with_unwrap(item_compact):
+    """Try to decode a data item, stripping B^n wrapper first"""
+    n, unwrapped = strip_b_wrapper(item_compact)
+
+    # Try as Scott number
+    try:
+        num = decode_scott_number(unwrapped)
+        if num is not None:
+            return n, 'number', num
+    except Exception:
+        pass
+
+    # Try as Scott list of numbers
+    try:
+        nums = decode_scott_list(unwrapped)
+        if nums and len(nums) > 0:
+            return n, 'list', nums
+    except Exception:
+        pass
+
+    # Try to identify single constants
+    if unwrapped == 'X':
+        return n, 'K', None
+    if unwrapped == 'D':
+        return n, 'I', None
+    if unwrapped == 'k':
+        return n, 'S', None
+
+    return n, 'unknown', unwrapped
+
+
 if __name__ == '__main__':
     print("=== Step 2: Parse Structure ===\n")
 
@@ -441,35 +509,27 @@ if __name__ == '__main__':
 
     print(f"Saved {len(result['data_items'])} data items to extracted/data_items/")
 
-    # Try to decode known data items
-    print("\n=== Decoding data items ===")
+    # Try to decode known data items with B^n unwrapping
+    print("\n=== Decoding data items (with B^n unwrapping) ===")
     for i, item in enumerate(result['data_items']):
-        if len(item) <= 2000 and len(item) > 1:
-            try:
-                # Try as number
-                num = decode_scott_number(item)
-                if num is not None:
-                    print(f"  Item {i:2d}: number = {num}")
-                    continue
-            except Exception:
-                pass
+        if len(item) > 10000:
+            n, unwrapped = strip_b_wrapper(item)
+            print(f"  Item {i:2d}: B^{n} wrapper, {len(item):,} chars -> {len(unwrapped):,} unwrapped (too large)")
+            # Save unwrapped version
+            with open(os.path.join(items_dir, f'item_{i:02d}_unwrapped.txt'), 'w') as f:
+                f.write(unwrapped)
+            continue
 
-            try:
-                # Try as list of numbers
-                nums = decode_scott_list(item)
-                if nums:
-                    print(f"  Item {i:2d}: list = {nums}")
-                    continue
-            except Exception:
-                pass
-
-            print(f"  Item {i:2d}: {len(item)} chars (could not decode)")
-        elif len(item) == 1:
-            if item == 'X':
-                print(f"  Item {i:2d}: K (constant)")
-            elif item == 'D':
-                print(f"  Item {i:2d}: I (identity)")
-            elif item == 'k':
-                print(f"  Item {i:2d}: S (substitution)")
+        n, dtype, value = decode_with_unwrap(item)
+        if dtype == 'number':
+            print(f"  Item {i:2d}: B^{n}(number {value})  [{len(item)} chars]")
+        elif dtype == 'list':
+            print(f"  Item {i:2d}: B^{n}(list {value})  [{len(item)} chars]")
+        elif dtype in ('K', 'I', 'S'):
+            print(f"  Item {i:2d}: B^{n}({dtype})  [{len(item)} chars]")
         else:
-            print(f"  Item {i:2d}: {len(item):,} chars (too large to decode directly)")
+            unwrapped_preview = value[:80] + ('...' if len(value) > 80 else '')
+            print(f"  Item {i:2d}: B^{n}(unknown, {len(value)} chars)  [{len(item)} chars]  {unwrapped_preview}")
+            # Save unwrapped version
+            with open(os.path.join(items_dir, f'item_{i:02d}_unwrapped.txt'), 'w') as f:
+                f.write(value)
