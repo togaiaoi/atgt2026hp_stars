@@ -19,7 +19,8 @@
       "Bash(\"$USERPROFILE/.cargo/bin/cargo\" install lazyk-rust)",
       "Bash(\"$USERPROFILE/.cargo/bin/lazyk-rust\" --help)",
       "Bash(\"$USERPROFILE/.cargo/bin/cargo\" init --name ski-eval ski_eval_rs)",
-      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" build --release)"
+      "Bash(\"$USERPROFILE/.cargo/bin/cargo\" build --release)",
+      "Bash(d:/github/atgt2026hp_stars/ski_eval_rs/target/release/ski-eval.exe:*)"
     ]
   }
 }

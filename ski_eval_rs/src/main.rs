@@ -591,37 +591,143 @@ fn main() {
             deep_decode(&mut arena, result, remaining_fuel, 0, 20);
         }
         "qtree" => {
-            // Interpret as PAIR(header, quadtree) and render image
+            // Interpret output and render as quadtree image
             eprintln!("Quadtree image rendering...");
 
-            // Extract snd (the image data)
-            let ki = make_false(&mut arena);
-            let snd_app = arena.alloc(APP, result, ki);
-            let mut f = remaining_fuel;
-            arena.whnf(snd_app, &mut f);
-            let image_data = arena.follow(snd_app);
-            eprintln!("  Extracted image data ({} steps)", remaining_fuel - f);
-            remaining_fuel = f;
+            // The output is PAIR(header, image_data)
+            // header = PAIR(1,1) might be format code 3 (image)
+            // Extract image_data = snd(result)
+            let image_data = pair_snd(&mut arena, result, &mut remaining_fuel);
+            eprintln!("  Extracted image data");
 
-            // Try different resolutions
-            for depth in &[8, 10, 12] {
+            // === Method 1: Diamond encoding PAIR(cond, PAIR(qa, PAIR(qb, PAIR(qc, qd)))) ===
+            for depth in &[8, 10] {
                 let size = 1usize << depth;
-                let mut pixels = vec![0u8; size * size];
+                let mut pixels = vec![255u8; size * size]; // default white
                 let mut pixel_count = 0u64;
-                eprintln!("  Rendering {}x{} (depth {})...", size, size, depth);
-                render_quadtree(&mut arena, image_data, &mut pixels, 0, 0, size, *depth, &mut remaining_fuel, &mut pixel_count);
+                eprintln!("  Diamond {}x{} (depth {})...", size, size, depth);
+                render_diamond(&mut arena, image_data, &mut pixels, 0, 0, size, size, &mut remaining_fuel, &mut pixel_count);
                 eprintln!("    {} pixels rendered, {} nodes", pixel_count, arena.nodes.len());
-
-                // Write PGM
-                let fname = format!("d:/github/atgt2026hp_stars/images/qtree_{}x{}.pgm", size, size);
+                let fname = format!("d:/github/atgt2026hp_stars/images/diamond_{}x{}.pgm", size, size);
                 write_pgm(&fname, size, size, &pixels);
                 eprintln!("    Saved {}", fname);
+            }
+
+            // === Method 2: PAIR(PAIR(nw,ne), PAIR(sw,se)) with snd(result) ===
+            for depth in &[8, 10] {
+                let size = 1usize << depth;
+                let mut pixels = vec![255u8; size * size];
+                let mut pixel_count = 0u64;
+                eprintln!("  Quadtree v2 {}x{} on snd(result)...", size, size);
+                render_quadtree_v2(&mut arena, image_data, &mut pixels, 0, 0, size, size, &mut remaining_fuel, &mut pixel_count);
+                eprintln!("    {} pixels rendered, {} nodes", pixel_count, arena.nodes.len());
+                let fname = format!("d:/github/atgt2026hp_stars/images/qtree2_snd_{}x{}.pgm", size, size);
+                write_pgm(&fname, size, size, &pixels);
+                eprintln!("    Saved {}", fname);
+            }
+
+            // === Method 3: PAIR(PAIR(nw,ne), PAIR(sw,se)) with full result ===
+            for depth in &[8, 10] {
+                let size = 1usize << depth;
+                let mut pixels = vec![255u8; size * size];
+                let mut pixel_count = 0u64;
+                eprintln!("  Quadtree v2 {}x{} on full result...", size, size);
+                render_quadtree_v2(&mut arena, result, &mut pixels, 0, 0, size, size, &mut remaining_fuel, &mut pixel_count);
+                eprintln!("    {} pixels rendered, {} nodes", pixel_count, arena.nodes.len());
+                let fname = format!("d:/github/atgt2026hp_stars/images/qtree2_full_{}x{}.pgm", size, size);
+                write_pgm(&fname, size, size, &pixels);
+                eprintln!("    Saved {}", fname);
+            }
+        }
+        "apply" => {
+            // Apply result to a Scott number argument and decode
+            // Usage: --decode apply  (tries N=2,4,8,16,256)
+            eprintln!("Applying result to resolution arguments...");
+            for n in &[2u64, 4, 8, 16, 128, 256] {
+                let num = make_scott_num(&mut arena, *n);
+                let app = arena.alloc(APP, result, num);
+                let mut f = remaining_fuel / 10;
+                arena.whnf(app, &mut f);
+                let r = arena.follow(app);
+                let steps_used = remaining_fuel / 10 - f;
+                let desc = describe(&arena, r, 0);
+                let display = if desc.len() > 300 { &desc[..300] } else { &desc };
+                eprintln!("  result({}) = {} ... [{} steps, {} nodes]", n, display, steps_used, arena.nodes.len());
+
+                // Try bool
+                let b = decode_bool(&mut arena, r, f.min(1000000));
+                if let Some(bv) = b {
+                    eprintln!("    -> BOOL: {}", bv);
+                }
+                // Try num
+                let num_r = decode_scott_num(&mut arena, r, f.min(1000000));
+                if let Some(nv) = num_r {
+                    eprintln!("    -> NUMBER: {}", nv);
+                }
+            }
+
+            // Also try: apply snd(result) to N
+            let snd_result = pair_snd(&mut arena, result, &mut remaining_fuel);
+            eprintln!("\nApplying snd(result) to resolution arguments...");
+            for n in &[2u64, 8, 256] {
+                let num = make_scott_num(&mut arena, *n);
+                let app = arena.alloc(APP, snd_result, num);
+                let mut f = remaining_fuel / 10;
+                arena.whnf(app, &mut f);
+                let r = arena.follow(app);
+                let steps_used = remaining_fuel / 10 - f;
+                let desc = describe(&arena, r, 0);
+                let display = if desc.len() > 300 { &desc[..300] } else { &desc };
+                eprintln!("  snd(result)({}) = {} ... [{} steps, {} nodes]", n, display, steps_used, arena.nodes.len());
             }
         }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);
         }
     }
+}
+
+/// Build Scott-encoded number in arena.
+fn make_scott_num(arena: &mut Arena, n: u64) -> u32 {
+    if n == 0 {
+        return make_false(arena); // nil = false = KI
+    }
+    let mut bits = Vec::new();
+    let mut temp = n;
+    while temp > 0 {
+        bits.push(temp & 1);
+        temp >>= 1;
+    }
+    // Build from MSB to LSB (reversed bits, build pair chain)
+    let nil = make_false(arena);
+    let mut result = nil;
+    for &bit in bits.iter().rev() {
+        let bit_node = if bit == 1 {
+            // true = S(KK)I
+            let k1 = arena.alloc(K, NIL, NIL);
+            let k2 = arena.alloc(K, NIL, NIL);
+            let kk = arena.alloc(APP, k1, k2);
+            let s = arena.alloc(S, NIL, NIL);
+            let skk = arena.alloc(APP, s, kk);
+            let i = arena.alloc(I, NIL, NIL);
+            arena.alloc(APP, skk, i)
+        } else {
+            make_false(arena) // false = KI
+        };
+        // pair(bit, result) = S(SI(K bit))(K result)
+        let s1 = arena.alloc(S, NIL, NIL);
+        let i1 = arena.alloc(I, NIL, NIL);
+        let si = arena.alloc(APP, s1, i1);
+        let k_bit = arena.alloc(K, NIL, NIL);
+        let k_bit_app = arena.alloc(APP, k_bit, bit_node);
+        let si_kbit = arena.alloc(APP, si, k_bit_app);
+        let s2 = arena.alloc(S, NIL, NIL);
+        let s_inner = arena.alloc(APP, s2, si_kbit);
+        let k_rest = arena.alloc(K, NIL, NIL);
+        let k_rest_app = arena.alloc(APP, k_rest, result);
+        result = arena.alloc(APP, s_inner, k_rest_app);
+    }
+    result
 }
 
 /// Recursively decode a pair structure.
@@ -689,65 +795,113 @@ fn pair_snd(arena: &mut Arena, node: u32, fuel: &mut u64) -> u32 {
     arena.follow(app)
 }
 
-/// Render quadtree to pixel buffer.
-/// Quadtree encoding:
-/// - FALSE (leaf): white pixel (255)
-/// - TRUE or NUMBER(1) (leaf): black pixel (0)
-/// - PAIR(PAIR(nw, ne), PAIR(sw, se)): internal node, split into 4 quadrants
-fn render_quadtree(
+/// Render diamond quadtree to pixel buffer.
+/// Diamond encoding (5-element):
+///   PAIR(cond, PAIR(qa, PAIR(qb, PAIR(qc, qd))))
+///   cond = boolean pixel value at this level
+///   qa = m-1, z-1 (top-left/NW)
+///   qb = m-1, z+1 (top-right/NE)
+///   qc = m+1, z-1 (bottom-left/SW)
+///   qd = m+1, z+1 (bottom-right/SE)
+/// Leaf: FALSE (white) or TRUE (black)
+fn render_diamond(
     arena: &mut Arena,
     node: u32,
     pixels: &mut [u8],
     x: usize,
     y: usize,
     size: usize,
-    max_depth: usize,
+    img_width: usize,
     fuel: &mut u64,
     count: &mut u64,
 ) {
     if *fuel == 0 || size == 0 { return; }
 
     // Check if it's a boolean leaf
-    let is_bool = decode_bool(arena, node, (*fuel).min(100000));
+    let is_bool = decode_bool(arena, node, (*fuel).min(200000));
     match is_bool {
         Some(false) => {
-            // White pixel(s)
-            fill_rect(pixels, x, y, size, 255, 1 << max_depth);
+            fill_rect(pixels, x, y, size, 255, img_width); // white
             *count += (size * size) as u64;
             return;
         }
         Some(true) => {
-            // Black pixel(s)
-            fill_rect(pixels, x, y, size, 0, 1 << max_depth);
+            fill_rect(pixels, x, y, size, 0, img_width); // black
             *count += (size * size) as u64;
             return;
         }
         None => {}
     }
 
-    // If size is 1, we're at pixel level - try to determine color
+    // At pixel level, extract condition for color
     if size <= 1 {
-        // Try number: 0 = white, 1 = black
-        if let Some(n) = decode_scott_num(arena, node, (*fuel).min(100000)) {
-            let color = if n > 0 { 0u8 } else { 255u8 };
-            let img_w = 1 << max_depth;
-            if x < img_w && y < img_w {
-                pixels[y * img_w + x] = color;
-            }
-            *count += 1;
-            return;
-        }
-        // Unknown - gray
-        let img_w = 1 << max_depth;
-        if x < img_w && y < img_w {
-            pixels[y * img_w + x] = 128;
+        let cond = pair_fst(arena, node, fuel);
+        let b = decode_bool(arena, cond, (*fuel).min(200000));
+        let color = match b {
+            Some(true) => 0u8,   // black
+            Some(false) => 255u8, // white
+            None => 128u8,        // gray (unknown)
+        };
+        if x < img_width && y < img_width {
+            pixels[y * img_width + x] = color;
         }
         *count += 1;
         return;
     }
 
-    // It's a pair - try to split into 4 quadrants
-    // Structure: PAIR(PAIR(nw, ne), PAIR(sw, se))
+    // Diamond structure: PAIR(cond, PAIR(qa, PAIR(qb, PAIR(qc, qd))))
+    let rest = pair_snd(arena, node, fuel);       // PAIR(qa, PAIR(qb, PAIR(qc, qd)))
+    let qa = pair_fst(arena, rest, fuel);          // qa (NW: m-1, z-1)
+    let rest2 = pair_snd(arena, rest, fuel);       // PAIR(qb, PAIR(qc, qd))
+    let qb = pair_fst(arena, rest2, fuel);         // qb (NE: m-1, z+1)
+    let rest3 = pair_snd(arena, rest2, fuel);      // PAIR(qc, qd)
+    let qc = pair_fst(arena, rest3, fuel);         // qc (SW: m+1, z-1)
+    let qd = pair_snd(arena, rest3, fuel);         // qd (SE: m+1, z+1)
+
+    let half = size / 2;
+    render_diamond(arena, qa, pixels, x, y, half, img_width, fuel, count);
+    render_diamond(arena, qb, pixels, x + half, y, half, img_width, fuel, count);
+    render_diamond(arena, qc, pixels, x, y + half, half, img_width, fuel, count);
+    render_diamond(arena, qd, pixels, x + half, y + half, half, img_width, fuel, count);
+}
+
+/// Alternate interpretation: PAIR(PAIR(nw, ne), PAIR(sw, se))
+fn render_quadtree_v2(
+    arena: &mut Arena,
+    node: u32,
+    pixels: &mut [u8],
+    x: usize,
+    y: usize,
+    size: usize,
+    img_width: usize,
+    fuel: &mut u64,
+    count: &mut u64,
+) {
+    if *fuel == 0 || size == 0 { return; }
+
+    let is_bool = decode_bool(arena, node, (*fuel).min(200000));
+    match is_bool {
+        Some(false) => {
+            fill_rect(pixels, x, y, size, 255, img_width);
+            *count += (size * size) as u64;
+            return;
+        }
+        Some(true) => {
+            fill_rect(pixels, x, y, size, 0, img_width);
+            *count += (size * size) as u64;
+            return;
+        }
+        None => {}
+    }
+
+    if size <= 1 {
+        if x < img_width && y < img_width {
+            pixels[y * img_width + x] = 128;
+        }
+        *count += 1;
+        return;
+    }
+
     let top = pair_fst(arena, node, fuel);
     let bottom = pair_snd(arena, node, fuel);
     let nw = pair_fst(arena, top, fuel);
@@ -756,10 +910,10 @@ fn render_quadtree(
     let se = pair_snd(arena, bottom, fuel);
 
     let half = size / 2;
-    render_quadtree(arena, nw, pixels, x, y, half, max_depth, fuel, count);
-    render_quadtree(arena, ne, pixels, x + half, y, half, max_depth, fuel, count);
-    render_quadtree(arena, sw, pixels, x, y + half, half, max_depth, fuel, count);
-    render_quadtree(arena, se, pixels, x + half, y + half, half, max_depth, fuel, count);
+    render_quadtree_v2(arena, nw, pixels, x, y, half, img_width, fuel, count);
+    render_quadtree_v2(arena, ne, pixels, x + half, y, half, img_width, fuel, count);
+    render_quadtree_v2(arena, sw, pixels, x, y + half, half, img_width, fuel, count);
+    render_quadtree_v2(arena, se, pixels, x + half, y + half, half, img_width, fuel, count);
 }
 
 /// Fill a rectangular region with a color.
