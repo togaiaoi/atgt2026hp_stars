@@ -3,4 +3,5 @@ stars_compact.txt
 .venv
 *.pyc
 __pycache__
-images/
+images/*
+!images/qtree*

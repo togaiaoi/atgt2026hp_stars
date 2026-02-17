@@ -300,10 +300,7 @@ fn output_byte_stream(arena: &mut Arena, node: u32, fuel: u64) {
             eprintln!("\n[End of stream after {} bytes]", count);
             break;
         }
-        if is_nil.is_none() {
-            eprintln!("\n[Not a boolean at position {}, cannot decode further]", count);
-            break;
-        }
+        // Note: is_nil == None means it's a pair (not a simple boolean) - continue
 
         let k_sel = arena.alloc(K, NIL, NIL);
         let fst_app = arena.alloc(APP, current, k_sel);
@@ -372,7 +369,7 @@ fn decode_number_list(arena: &mut Arena, node: u32, fuel: u64, max_items: usize)
 
         let is_nil = decode_bool(arena, current, remaining_fuel / 20);
         if is_nil == Some(false) { break; }
-        if is_nil.is_none() { break; }
+        // None means pair (non-nil) - continue
 
         let k_sel = arena.alloc(K, NIL, NIL);
         let fst_app = arena.alloc(APP, current, k_sel);
@@ -410,7 +407,7 @@ fn decode_bool_list(arena: &mut Arena, node: u32, fuel: u64, max_items: usize) -
 
         let is_nil = decode_bool(arena, current, remaining_fuel / 20);
         if is_nil == Some(false) { break; }
-        if is_nil.is_none() { break; }
+        // None means pair (non-nil) - continue
 
         // Extract head
         let k_sel = arena.alloc(K, NIL, NIL);
@@ -533,8 +530,247 @@ fn main() {
         "stream" => {
             output_byte_stream(&mut arena, result, remaining_fuel);
         }
+        "fst" => {
+            // Extract first element of pair: pair(K) = fst
+            let k_sel = arena.alloc(K, NIL, NIL);
+            let fst_app = arena.alloc(APP, result, k_sel);
+            let mut f = remaining_fuel;
+            arena.whnf(fst_app, &mut f);
+            let fst = arena.follow(fst_app);
+            let steps2 = remaining_fuel - f;
+            eprintln!("  fst: {} additional steps", steps2);
+
+            // Try various decodings
+            let desc = describe(&arena, fst, 0);
+            if desc.len() > 2000 {
+                eprintln!("  describe: {}...", &desc[..2000]);
+            } else {
+                eprintln!("  describe: {}", desc);
+            }
+            match decode_bool(&mut arena, fst, f) {
+                Some(true) => println!("fst = TRUE"),
+                Some(false) => println!("fst = FALSE"),
+                None => {
+                    match decode_scott_num(&mut arena, fst, f) {
+                        Some(n) => println!("fst = NUMBER({})", n),
+                        None => println!("fst = {}", if desc.len() > 200 { &desc[..200] } else { &desc }),
+                    }
+                }
+            }
+        }
+        "snd" => {
+            // Extract second element: pair(KI) = snd
+            let ki = make_false(&mut arena);
+            let snd_app = arena.alloc(APP, result, ki);
+            let mut f = remaining_fuel;
+            arena.whnf(snd_app, &mut f);
+            let snd = arena.follow(snd_app);
+            let steps2 = remaining_fuel - f;
+            eprintln!("  snd: {} additional steps", steps2);
+
+            let desc = describe(&arena, snd, 0);
+            if desc.len() > 2000 {
+                eprintln!("  describe: {}...", &desc[..2000]);
+            } else {
+                eprintln!("  describe: {}", desc);
+            }
+            match decode_bool(&mut arena, snd, f) {
+                Some(true) => println!("snd = TRUE"),
+                Some(false) => println!("snd = FALSE"),
+                None => {
+                    match decode_scott_num(&mut arena, snd, f) {
+                        Some(n) => println!("snd = NUMBER({})", n),
+                        None => println!("snd = {}", if desc.len() > 200 { &desc[..200] } else { &desc }),
+                    }
+                }
+            }
+        }
+        "deep" => {
+            // Recursively unpack pairs and try to decode structure
+            eprintln!("Deep decoding...");
+            deep_decode(&mut arena, result, remaining_fuel, 0, 20);
+        }
+        "qtree" => {
+            // Interpret as PAIR(header, quadtree) and render image
+            eprintln!("Quadtree image rendering...");
+
+            // Extract snd (the image data)
+            let ki = make_false(&mut arena);
+            let snd_app = arena.alloc(APP, result, ki);
+            let mut f = remaining_fuel;
+            arena.whnf(snd_app, &mut f);
+            let image_data = arena.follow(snd_app);
+            eprintln!("  Extracted image data ({} steps)", remaining_fuel - f);
+            remaining_fuel = f;
+
+            // Try different resolutions
+            for depth in &[8, 10, 12] {
+                let size = 1usize << depth;
+                let mut pixels = vec![0u8; size * size];
+                let mut pixel_count = 0u64;
+                eprintln!("  Rendering {}x{} (depth {})...", size, size, depth);
+                render_quadtree(&mut arena, image_data, &mut pixels, 0, 0, size, *depth, &mut remaining_fuel, &mut pixel_count);
+                eprintln!("    {} pixels rendered, {} nodes", pixel_count, arena.nodes.len());
+
+                // Write PGM
+                let fname = format!("d:/github/atgt2026hp_stars/images/qtree_{}x{}.pgm", size, size);
+                write_pgm(&fname, size, size, &pixels);
+                eprintln!("    Saved {}", fname);
+            }
+        }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);
+        }
+    }
+}
+
+/// Recursively decode a pair structure.
+fn deep_decode(arena: &mut Arena, node: u32, fuel: u64, depth: usize, max_depth: usize) {
+    if depth > max_depth || fuel == 0 { return; }
+
+    let indent = "  ".repeat(depth);
+
+    // Check if boolean
+    match decode_bool(arena, node, fuel / 10) {
+        Some(true) => { println!("{}TRUE", indent); return; }
+        Some(false) => { println!("{}FALSE (nil)", indent); return; }
+        None => {}
+    }
+
+    // Check if number
+    if let Some(n) = decode_scott_num(arena, node, fuel / 10) {
+        if n > 0 {
+            println!("{}NUMBER({})", indent, n);
+            return;
+        }
+    }
+
+    // Try as pair
+    let k_sel = arena.alloc(K, NIL, NIL);
+    let fst_app = arena.alloc(APP, node, k_sel);
+    let mut f1 = fuel / 4;
+    arena.whnf(fst_app, &mut f1);
+    let fst = arena.follow(fst_app);
+
+    let ki = make_false(arena);
+    let snd_app = arena.alloc(APP, node, ki);
+    let mut f2 = fuel / 4;
+    arena.whnf(snd_app, &mut f2);
+    let snd = arena.follow(snd_app);
+
+    println!("{}PAIR(", indent);
+    deep_decode(arena, fst, fuel / 4, depth + 1, max_depth);
+    println!("{},", indent);
+    deep_decode(arena, snd, fuel / 4, depth + 1, max_depth);
+    println!("{})", indent);
+}
+
+/// Write PGM image file.
+fn write_pgm(filename: &str, width: usize, height: usize, pixels: &[u8]) {
+    let mut f = fs::File::create(filename).expect("failed to create PGM file");
+    let header = format!("P5\n{} {}\n255\n", width, height);
+    f.write_all(header.as_bytes()).expect("write header");
+    f.write_all(pixels).expect("write pixels");
+}
+
+/// Extract pair's first element.
+fn pair_fst(arena: &mut Arena, node: u32, fuel: &mut u64) -> u32 {
+    let k_sel = arena.alloc(K, NIL, NIL);
+    let app = arena.alloc(APP, node, k_sel);
+    arena.whnf(app, fuel);
+    arena.follow(app)
+}
+
+/// Extract pair's second element.
+fn pair_snd(arena: &mut Arena, node: u32, fuel: &mut u64) -> u32 {
+    let ki = make_false(arena);
+    let app = arena.alloc(APP, node, ki);
+    arena.whnf(app, fuel);
+    arena.follow(app)
+}
+
+/// Render quadtree to pixel buffer.
+/// Quadtree encoding:
+/// - FALSE (leaf): white pixel (255)
+/// - TRUE or NUMBER(1) (leaf): black pixel (0)
+/// - PAIR(PAIR(nw, ne), PAIR(sw, se)): internal node, split into 4 quadrants
+fn render_quadtree(
+    arena: &mut Arena,
+    node: u32,
+    pixels: &mut [u8],
+    x: usize,
+    y: usize,
+    size: usize,
+    max_depth: usize,
+    fuel: &mut u64,
+    count: &mut u64,
+) {
+    if *fuel == 0 || size == 0 { return; }
+
+    // Check if it's a boolean leaf
+    let is_bool = decode_bool(arena, node, (*fuel).min(100000));
+    match is_bool {
+        Some(false) => {
+            // White pixel(s)
+            fill_rect(pixels, x, y, size, 255, 1 << max_depth);
+            *count += (size * size) as u64;
+            return;
+        }
+        Some(true) => {
+            // Black pixel(s)
+            fill_rect(pixels, x, y, size, 0, 1 << max_depth);
+            *count += (size * size) as u64;
+            return;
+        }
+        None => {}
+    }
+
+    // If size is 1, we're at pixel level - try to determine color
+    if size <= 1 {
+        // Try number: 0 = white, 1 = black
+        if let Some(n) = decode_scott_num(arena, node, (*fuel).min(100000)) {
+            let color = if n > 0 { 0u8 } else { 255u8 };
+            let img_w = 1 << max_depth;
+            if x < img_w && y < img_w {
+                pixels[y * img_w + x] = color;
+            }
+            *count += 1;
+            return;
+        }
+        // Unknown - gray
+        let img_w = 1 << max_depth;
+        if x < img_w && y < img_w {
+            pixels[y * img_w + x] = 128;
+        }
+        *count += 1;
+        return;
+    }
+
+    // It's a pair - try to split into 4 quadrants
+    // Structure: PAIR(PAIR(nw, ne), PAIR(sw, se))
+    let top = pair_fst(arena, node, fuel);
+    let bottom = pair_snd(arena, node, fuel);
+    let nw = pair_fst(arena, top, fuel);
+    let ne = pair_snd(arena, top, fuel);
+    let sw = pair_fst(arena, bottom, fuel);
+    let se = pair_snd(arena, bottom, fuel);
+
+    let half = size / 2;
+    render_quadtree(arena, nw, pixels, x, y, half, max_depth, fuel, count);
+    render_quadtree(arena, ne, pixels, x + half, y, half, max_depth, fuel, count);
+    render_quadtree(arena, sw, pixels, x, y + half, half, max_depth, fuel, count);
+    render_quadtree(arena, se, pixels, x + half, y + half, half, max_depth, fuel, count);
+}
+
+/// Fill a rectangular region with a color.
+fn fill_rect(pixels: &mut [u8], x: usize, y: usize, size: usize, color: u8, img_width: usize) {
+    for dy in 0..size {
+        for dx in 0..size {
+            let px = x + dx;
+            let py = y + dy;
+            if px < img_width && py < img_width {
+                pixels[py * img_width + px] = color;
+            }
         }
     }
 }
