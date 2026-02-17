@@ -1,0 +1,2 @@
+compact: kkkXk--kXX--D---XkD-D----kkXk--kXX--D---XkD-D----kkXk--kXkXk----kXkXkD-----kXkXX----kkXk--kXkXk----kXkXkXk------kXkXkXX------kkXk--kXX--kXk--kXX--D-----XkXkXkXX------kXkkXk--kXkD---kXX--D------kXX--kXX--D-----------XXXD---------XkXX--D----XD--
+lambda: \x3. \x5. x3 (x5 x5) (\x11. x3 (x11 x11)) (\x17. \x18. \x19. x19 (\x23. \x24. x17 (\x28. \x29. x28 x23 x18) x24) x18) (\x37. \x38. x38)
