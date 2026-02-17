@@ -5,7 +5,8 @@
       "Bash(tail:*)",
       "Bash(wc:*)",
       "Bash(uv init:*)",
-      "Bash(PYTHONIOENCODING=utf-8 uv run python:*)"
+      "Bash(PYTHONIOENCODING=utf-8 uv run python:*)",
+      "Bash(uv run:*)"
     ]
   }
 }

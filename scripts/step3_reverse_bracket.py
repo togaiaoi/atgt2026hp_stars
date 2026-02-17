@@ -23,6 +23,7 @@ import sys
 import io
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.setrecursionlimit(10000)
 
 
 class UnbracketError(Exception):
