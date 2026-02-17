@@ -1,3 +1,5 @@
 stars.txt
 stars_compact.txt
 .venv
+*.pyc
+__pycache__
