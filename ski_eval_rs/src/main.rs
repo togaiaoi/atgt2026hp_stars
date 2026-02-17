@@ -272,7 +272,12 @@ fn decode_scott_num(arena: &mut Arena, node: u32, fuel: u64) -> Option<u64> {
     }
 
     if bits.is_empty() {
-        return Some(0);
+        // Check if the original value was actually nil (false)
+        let original_nil = decode_bool(arena, node, fuel.min(100000));
+        if original_nil == Some(false) {
+            return Some(0); // genuinely 0
+        }
+        return None; // not a number
     }
     let mut n: u64 = 0;
     for (i, &b) in bits.iter().enumerate() {
@@ -639,46 +644,224 @@ fn main() {
                 eprintln!("    Saved {}", fname);
             }
         }
-        "apply" => {
-            // Apply result to a Scott number argument and decode
-            // Usage: --decode apply  (tries N=2,4,8,16,256)
-            eprintln!("Applying result to resolution arguments...");
-            for n in &[2u64, 4, 8, 16, 128, 256] {
-                let num = make_scott_num(&mut arena, *n);
-                let app = arena.alloc(APP, result, num);
-                let mut f = remaining_fuel / 10;
-                arena.whnf(app, &mut f);
-                let r = arena.follow(app);
-                let steps_used = remaining_fuel / 10 - f;
-                let desc = describe(&arena, r, 0);
-                let display = if desc.len() > 300 { &desc[..300] } else { &desc };
-                eprintln!("  result({}) = {} ... [{} steps, {} nodes]", n, display, steps_used, arena.nodes.len());
-
-                // Try bool
-                let b = decode_bool(&mut arena, r, f.min(1000000));
-                if let Some(bv) = b {
-                    eprintln!("    -> BOOL: {}", bv);
-                }
-                // Try num
-                let num_r = decode_scott_num(&mut arena, r, f.min(1000000));
-                if let Some(nv) = num_r {
-                    eprintln!("    -> NUMBER: {}", nv);
-                }
+        "leaves" => {
+            // Walk the output as a binary tree, collecting boolean leaves
+            eprintln!("Collecting boolean leaves from output tree...");
+            let snd_r = pair_snd(&mut arena, result, &mut remaining_fuel);
+            let mut leaves: Vec<u8> = Vec::new();
+            collect_bool_leaves(&mut arena, snd_r, &mut remaining_fuel, &mut leaves, 500000);
+            eprintln!("  Collected {} boolean leaves", leaves.len());
+            if leaves.len() > 100 {
+                let sample: Vec<u8> = leaves[..100].to_vec();
+                eprintln!("  First 100: {:?}", sample);
             }
 
-            // Also try: apply snd(result) to N
-            let snd_result = pair_snd(&mut arena, result, &mut remaining_fuel);
-            eprintln!("\nApplying snd(result) to resolution arguments...");
-            for n in &[2u64, 8, 256] {
-                let num = make_scott_num(&mut arena, *n);
-                let app = arena.alloc(APP, snd_result, num);
-                let mut f = remaining_fuel / 10;
-                arena.whnf(app, &mut f);
-                let r = arena.follow(app);
-                let steps_used = remaining_fuel / 10 - f;
+            // Also from full result
+            let mut leaves2: Vec<u8> = Vec::new();
+            collect_bool_leaves(&mut arena, result, &mut remaining_fuel, &mut leaves2, 500000);
+            eprintln!("  From full result: {} boolean leaves", leaves2.len());
+            if leaves2.len() > 100 {
+                let sample: Vec<u8> = leaves2[..100].to_vec();
+                eprintln!("  First 100: {:?}", sample);
+            }
+
+            // Try rendering as image with width 4096
+            for (name, lvs) in &[("snd", &leaves), ("full", &leaves2)] {
+                let n = lvs.len();
+                if n < 100 { continue; }
+                for width in &[4096usize, 2048, 1024, 512, 256, 128] {
+                    if n < *width { continue; }
+                    let height = n / width;
+                    if height < 10 { continue; }
+                    let mut pixels: Vec<u8> = lvs[..width * height].iter().map(|&b| if b == 1 { 0u8 } else { 255u8 }).collect();
+                    let fname = format!("d:/github/atgt2026hp_stars/images/leaves_{}_{}x{}.pgm", name, width, height);
+                    write_pgm(&fname, *width, height, &pixels);
+                    eprintln!("  Saved {}", fname);
+                }
+            }
+        }
+        "trace" => {
+            // Trace the structure level by level
+            eprintln!("Tracing output structure...");
+            let mut f = remaining_fuel;
+
+            eprintln!("\n=== Level 0: result ===");
+            let desc0 = describe(&arena, result, 0);
+            eprintln!("  {}", if desc0.len() > 300 { &desc0[..300] } else { &desc0 });
+
+            let a = pair_fst(&mut arena, result, &mut f);
+            let b = pair_snd(&mut arena, result, &mut f);
+
+            eprintln!("\n=== Level 1a: fst(result) ===");
+            let da = describe(&arena, a, 0);
+            eprintln!("  {}", if da.len() > 300 { &da[..300] } else { &da });
+            if let Some(bn) = decode_scott_num(&mut arena, a, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+
+            eprintln!("\n=== Level 1b: snd(result) ===");
+            let db = describe(&arena, b, 0);
+            eprintln!("  {}", if db.len() > 300 { &db[..300] } else { &db });
+            if let Some(bb) = decode_bool(&mut arena, b, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+
+            let b_fst = pair_fst(&mut arena, b, &mut f);
+            let b_snd = pair_snd(&mut arena, b, &mut f);
+
+            eprintln!("\n=== Level 2a: fst(snd(result)) ===");
+            let d2a = describe(&arena, b_fst, 0);
+            eprintln!("  {}", if d2a.len() > 300 { &d2a[..300] } else { &d2a });
+            if let Some(bn) = decode_scott_num(&mut arena, b_fst, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+            if let Some(bb) = decode_bool(&mut arena, b_fst, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+
+            eprintln!("\n=== Level 2b: snd(snd(result)) ===");
+            let d2b = describe(&arena, b_snd, 0);
+            eprintln!("  {}", if d2b.len() > 300 { &d2b[..300] } else { &d2b });
+            if let Some(bb) = decode_bool(&mut arena, b_snd, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+
+            // Go deeper
+            let b_fst_fst = pair_fst(&mut arena, b_fst, &mut f);
+            let b_fst_snd = pair_snd(&mut arena, b_fst, &mut f);
+
+            eprintln!("\n=== Level 3a: fst(fst(snd(result))) ===");
+            let d3a = describe(&arena, b_fst_fst, 0);
+            eprintln!("  {}", if d3a.len() > 300 { &d3a[..300] } else { &d3a });
+            if let Some(bn) = decode_scott_num(&mut arena, b_fst_fst, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+            if let Some(bb) = decode_bool(&mut arena, b_fst_fst, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+
+            eprintln!("\n=== Level 3b: snd(fst(snd(result))) ===");
+            let d3b = describe(&arena, b_fst_snd, 0);
+            eprintln!("  {}", if d3b.len() > 300 { &d3b[..300] } else { &d3b });
+            if let Some(bn) = decode_scott_num(&mut arena, b_fst_snd, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+            if let Some(bb) = decode_bool(&mut arena, b_fst_snd, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+
+            // Level 4: go into b_fst_snd (which should be the next level of nesting)
+            let l4_fst = pair_fst(&mut arena, b_fst_snd, &mut f);
+            let l4_snd = pair_snd(&mut arena, b_fst_snd, &mut f);
+            eprintln!("\n=== Level 4a: fst(snd(fst(snd(r)))) ===");
+            if let Some(bn) = decode_scott_num(&mut arena, l4_fst, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+            if let Some(bb) = decode_bool(&mut arena, l4_fst, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+            let d4a = describe(&arena, l4_fst, 0);
+            eprintln!("  {}", if d4a.len() > 300 { &d4a[..300] } else { &d4a });
+
+            eprintln!("\n=== Level 4b: snd(snd(fst(snd(r)))) ===");
+            if let Some(bn) = decode_scott_num(&mut arena, l4_snd, f.min(1000000)) {
+                eprintln!("  -> NUMBER({})", bn);
+            }
+            if let Some(bb) = decode_bool(&mut arena, l4_snd, f.min(1000000)) {
+                eprintln!("  -> BOOL: {}", bb);
+            }
+            let d4b = describe(&arena, l4_snd, 0);
+            eprintln!("  {}", if d4b.len() > 300 { &d4b[..300] } else { &d4b });
+        }
+        "apply" => {
+            // Try applying result to various argument combinations to find pixel function
+            eprintln!("Probing result with various argument patterns...");
+            let mut f = remaining_fuel;
+
+            // Pattern 1: result(row)(col) - 2 args
+            eprintln!("\n--- Pattern: result(m)(z) ---");
+            for (m, z) in &[(0u64,0u64), (0,1), (1,0), (1,1), (2,3)] {
+                let mn = make_scott_num(&mut arena, *m);
+                let zn = make_scott_num(&mut arena, *z);
+                let app1 = arena.alloc(APP, result, mn);
+                let app2 = arena.alloc(APP, app1, zn);
+                let mut fuel = f.min(5000000);
+                arena.whnf(app2, &mut fuel);
+                let r = arena.follow(app2);
+                let b = decode_bool(&mut arena, r, 1000000);
                 let desc = describe(&arena, r, 0);
-                let display = if desc.len() > 300 { &desc[..300] } else { &desc };
-                eprintln!("  snd(result)({}) = {} ... [{} steps, {} nodes]", n, display, steps_used, arena.nodes.len());
+                let d = if desc.len() > 100 { &desc[..100] } else { &desc };
+                eprintln!("  result({},{}) = {} bool={:?}", m, z, d, b);
+            }
+
+            // Pattern 2: result(N)(m)(z) - 3 args
+            eprintln!("\n--- Pattern: result(N)(m)(z) ---");
+            for (n, m, z) in &[(8u64,0u64,0u64), (8,0,1), (8,1,0), (8,1,1), (8,3,5)] {
+                let nn = make_scott_num(&mut arena, *n);
+                let mn = make_scott_num(&mut arena, *m);
+                let zn = make_scott_num(&mut arena, *z);
+                let app1 = arena.alloc(APP, result, nn);
+                let app2 = arena.alloc(APP, app1, mn);
+                let app3 = arena.alloc(APP, app2, zn);
+                let mut fuel = f.min(10000000);
+                arena.whnf(app3, &mut fuel);
+                let r = arena.follow(app3);
+                let b = decode_bool(&mut arena, r, 1000000);
+                let desc = describe(&arena, r, 0);
+                let d = if desc.len() > 100 { &desc[..100] } else { &desc };
+                eprintln!("  result({},{},{}) = {} bool={:?}", n, m, z, d, b);
+            }
+
+            // Pattern 3: result(var)(m)(z) with var=1 (initial call)
+            eprintln!("\n--- Pattern: result(1)(m)(z) ---");
+            for (m, z) in &[(0u64,0u64), (0,1), (1,0), (1,1)] {
+                let v1 = make_scott_num(&mut arena, 1);
+                let mn = make_scott_num(&mut arena, *m);
+                let zn = make_scott_num(&mut arena, *z);
+                let app1 = arena.alloc(APP, result, v1);
+                let app2 = arena.alloc(APP, app1, mn);
+                let app3 = arena.alloc(APP, app2, zn);
+                let mut fuel = f.min(10000000);
+                arena.whnf(app3, &mut fuel);
+                let r = arena.follow(app3);
+                let b = decode_bool(&mut arena, r, 1000000);
+                let desc = describe(&arena, r, 0);
+                let d = if desc.len() > 100 { &desc[..100] } else { &desc };
+                eprintln!("  result(1,{},{}) = {} bool={:?}", m, z, d, b);
+            }
+
+            // Pattern 4: snd(result)(args)
+            let snd_r = pair_snd(&mut arena, result, &mut f);
+            eprintln!("\n--- Pattern: snd(result)(m)(z) ---");
+            for (m, z) in &[(0u64,0u64), (0,1), (1,0), (1,1)] {
+                let mn = make_scott_num(&mut arena, *m);
+                let zn = make_scott_num(&mut arena, *z);
+                let app1 = arena.alloc(APP, snd_r, mn);
+                let app2 = arena.alloc(APP, app1, zn);
+                let mut fuel = f.min(10000000);
+                arena.whnf(app2, &mut fuel);
+                let r = arena.follow(app2);
+                let b = decode_bool(&mut arena, r, 1000000);
+                let desc = describe(&arena, r, 0);
+                let d = if desc.len() > 100 { &desc[..100] } else { &desc };
+                eprintln!("  snd(r)({},{}) = {} bool={:?}", m, z, d, b);
+            }
+
+            // Pattern 5: fst(snd(result))(args) - maybe the actual function is deeper
+            let fst_snd = pair_fst(&mut arena, snd_r, &mut f);
+            eprintln!("\n--- Pattern: fst(snd(result))(m)(z) ---");
+            for (m, z) in &[(0u64,0u64), (0,1), (1,0), (1,1)] {
+                let mn = make_scott_num(&mut arena, *m);
+                let zn = make_scott_num(&mut arena, *z);
+                let app1 = arena.alloc(APP, fst_snd, mn);
+                let app2 = arena.alloc(APP, app1, zn);
+                let mut fuel = f.min(10000000);
+                arena.whnf(app2, &mut fuel);
+                let r = arena.follow(app2);
+                let b = decode_bool(&mut arena, r, 1000000);
+                let desc = describe(&arena, r, 0);
+                let d = if desc.len() > 100 { &desc[..100] } else { &desc };
+                eprintln!("  fst(snd(r))({},{}) = {} bool={:?}", m, z, d, b);
             }
         }
         _ => {
@@ -769,6 +952,35 @@ fn deep_decode(arena: &mut Arena, node: u32, fuel: u64, depth: usize, max_depth:
     println!("{},", indent);
     deep_decode(arena, snd, fuel / 4, depth + 1, max_depth);
     println!("{})", indent);
+}
+
+/// Collect boolean leaves from a pair tree by DFS.
+/// Treats pairs as internal nodes, booleans as leaves.
+fn collect_bool_leaves(
+    arena: &mut Arena,
+    node: u32,
+    fuel: &mut u64,
+    leaves: &mut Vec<u8>,
+    max_leaves: usize,
+) {
+    if leaves.len() >= max_leaves || *fuel == 0 { return; }
+
+    // Check if boolean leaf
+    let b = decode_bool(arena, node, (*fuel).min(100000));
+    match b {
+        Some(true) => { leaves.push(1); return; }
+        Some(false) => { leaves.push(0); return; }
+        None => {}
+    }
+
+    // Not a boolean - treat as pair and recurse
+    let fst = pair_fst(arena, node, fuel);
+    collect_bool_leaves(arena, fst, fuel, leaves, max_leaves);
+
+    if leaves.len() >= max_leaves { return; }
+
+    let snd = pair_snd(arena, node, fuel);
+    collect_bool_leaves(arena, snd, fuel, leaves, max_leaves);
 }
 
 /// Write PGM image file.
