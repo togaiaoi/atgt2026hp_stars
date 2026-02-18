@@ -2476,6 +2476,237 @@ fn main() {
                 write_pgm(&fname, sz, sz, &pix);
             }
         }
+        "io" => {
+            // I/O interpreter based on hint-new.md
+            // Output = (tuple (tuple p1 p2) Q) = pair1(pair1(p1, p2), Q)
+            // p1, p2 are Church-encoded numbers
+            // p1=0: halt, p1=1: output, p1=2: input
+            // Output: p2=0/1/2 for int/string/image, Q = pair1(data, continuation)
+            // Input: p2=0/1 for int/string, Q = λx.continuation
+            // Quick self-test of pair2 extraction
+            {
+                let true_node = make_true(&mut arena);
+                let false_node = make_false(&mut arena);
+                // Build a list: cons(nil, true) = pair2(false_node, true_node)
+                let nil = make_false(&mut arena);
+                let list1 = make_pair(&mut arena, nil, true_node);
+                // pair_snd(list1) should be true_node
+                let mut tf1 = 1000000u64;
+                let snd1 = pair_snd(&mut arena, list1, &mut tf1);
+                let snd1_bool = decode_bool(&mut arena, snd1, 1000000);
+                eprintln!("SELFTEST pair2: pair_snd(cons(nil, true)) = {:?} (expected Some(true))", snd1_bool);
+                // pair_fst(list1) should be nil
+                let mut tf2 = 1000000u64;
+                let fst1 = pair_fst(&mut arena, list1, &mut tf2);
+                let fst1_bool = decode_bool(&mut arena, fst1, 1000000);
+                eprintln!("SELFTEST pair2: pair_fst(cons(nil, true)) = {:?} (expected Some(false))", fst1_bool);
+                // Build cons(list1, false) = pair2(list1, false_node)
+                let false2 = make_false(&mut arena);
+                let list2 = make_pair(&mut arena, list1, false2);
+                let mut tf3 = 1000000u64;
+                let snd2 = pair_snd(&mut arena, list2, &mut tf3);
+                let snd2_bool = decode_bool(&mut arena, snd2, 1000000);
+                eprintln!("SELFTEST pair2: pair_snd(cons(list1, false)) = {:?} (expected Some(false))", snd2_bool);
+                let mut tf4 = 1000000u64;
+                let fst2 = pair_fst(&mut arena, list2, &mut tf4);
+                // fst2 should be list1; extracting snd from it should give true
+                let mut tf5 = 1000000u64;
+                let fst2_snd = pair_snd(&mut arena, fst2, &mut tf5);
+                let fst2_snd_bool = decode_bool(&mut arena, fst2_snd, 1000000);
+                eprintln!("SELFTEST pair2: pair_snd(pair_fst(list2)) = {:?} (expected Some(true))", fst2_snd_bool);
+            }
+
+            let mut current = result;
+            let mut step = 0u32;
+            let fuel_per_step: u64 = 50_000_000;
+
+            loop {
+                step += 1;
+                if step > 100 {
+                    eprintln!("Too many I/O steps, stopping.");
+                    break;
+                }
+
+                // current = (tuple tag Q) = pair1(tag, Q)
+                let mut f1 = fuel_per_step;
+                let tag = pair1_fst(&mut arena, current, &mut f1);
+                let mut f2 = fuel_per_step;
+                let q = pair1_snd(&mut arena, current, &mut f2);
+
+                // tag = (tuple p1 p2) = pair1(p1, p2)
+                let mut f3 = fuel_per_step;
+                let p1_node = pair1_fst(&mut arena, tag, &mut f3);
+                let mut f4 = fuel_per_step;
+                let p2_node = pair1_snd(&mut arena, tag, &mut f4);
+
+                let p1 = decode_church_num(&mut arena, p1_node, fuel_per_step);
+                let p2 = decode_church_num(&mut arena, p2_node, fuel_per_step);
+
+                eprintln!("Step {}: p1={:?}, p2={:?}", step, p1, p2);
+                eprintln!("  tag node: {}", describe(&arena, tag, 0));
+                eprintln!("  p1 node: {}", describe(&arena, p1_node, 0));
+                eprintln!("  p2 node: {}", describe(&arena, p2_node, 0));
+
+                match p1 {
+                    Some(0) => {
+                        eprintln!("HALT instruction.");
+                        break;
+                    }
+                    Some(1) => {
+                        // Output instruction
+                        // Q = pair1(data, continuation)
+                        let mut fq1 = fuel_per_step;
+                        let data = pair1_fst(&mut arena, q, &mut fq1);
+                        let mut fq2 = fuel_per_step;
+                        let cont = pair1_snd(&mut arena, q, &mut fq2);
+
+                        // String list uses: cons(prev_list, value) = pair2(prev, val)
+                        // pair_fst = prev_list (rest), pair_snd = value (character code)
+                        // Character codes are integers encoded as: pair(bit, rest_bits)
+                        // pair_fst = bit, pair_snd = rest_bits (same as decode_scott_num)
+                        // Try BOTH conventions for string list scan
+                        for conv in ["B_fst_val", "A_fst_rest"] {
+                            let mut wd = data;
+                            let mut total = 0u32;
+                            let mut chars_a: Vec<Option<u64>> = Vec::new();
+                            let mut chars_int: Vec<Option<i64>> = Vec::new();
+                            for _i in 0..200u32 {
+                                let is_nil = decode_bool(&mut arena, wd, fuel_per_step);
+                                if is_nil == Some(false) {
+                                    eprintln!("  [{}] terminated at nil after {} elements", conv, total);
+                                    break;
+                                }
+                                total += 1;
+                                let (w_val, w_rest) = if conv == "B_fst_val" {
+                                    // Convention B: fst=value(char), snd=rest
+                                    let mut wf1 = fuel_per_step;
+                                    let v = pair_fst(&mut arena, wd, &mut wf1);
+                                    let mut wf2 = fuel_per_step;
+                                    let r = pair_snd(&mut arena, wd, &mut wf2);
+                                    (v, r)
+                                } else {
+                                    // Convention A: fst=rest, snd=value(char)
+                                    let mut wf1 = fuel_per_step;
+                                    let v = pair_snd(&mut arena, wd, &mut wf1);
+                                    let mut wf2 = fuel_per_step;
+                                    let r = pair_fst(&mut arena, wd, &mut wf2);
+                                    (v, r)
+                                };
+                                let scott = decode_scott_num(&mut arena, w_val, fuel_per_step);
+                                let intval = decode_integer(&mut arena, w_val, fuel_per_step);
+                                if total <= 40 {
+                                    let vd = describe(&arena, w_val, 0);
+                                    eprintln!("  [{}] elem[{}]: scott={:?} int={:?} val={}", conv, total-1, scott, intval, &vd[..120.min(vd.len())]);
+                                }
+                                chars_a.push(scott);
+                                chars_int.push(intval);
+                                wd = w_rest;
+                            }
+                            eprintln!("  [{}] total: {} elements", conv, total);
+                            // Show values
+                            let vals: Vec<String> = chars_a.iter().zip(chars_int.iter()).map(|(s, i)| {
+                                match (s, i) {
+                                    (Some(n), _) => format!("{}", n),
+                                    (_, Some(n)) => format!("i{}", n),
+                                    _ => "?".to_string(),
+                                }
+                            }).collect();
+                            eprintln!("  [{}] values: {}", conv, vals.join(","));
+                            // Try to build string from integer values
+                            let mut str_chars: Vec<char> = Vec::new();
+                            for i in &chars_int {
+                                match i {
+                                    Some(n) if *n >= 32 && *n < 127 => str_chars.push(*n as u8 as char),
+                                    Some(n) if *n >= 0 && *n < 0x110000 => str_chars.push(char::from_u32(*n as u32).unwrap_or('?')),
+                                    _ => str_chars.push('?'),
+                                }
+                            }
+                            let as_is: String = str_chars.iter().collect();
+                            let reversed: String = str_chars.iter().rev().collect();
+                            eprintln!("  [{}] as string (outer-first): {:?}", conv, &as_is[..200.min(as_is.len())]);
+                            eprintln!("  [{}] as string (reversed): {:?}", conv, &reversed[..200.min(reversed.len())]);
+                        }
+
+                        match p2 {
+                            Some(0) => {
+                                // Integer output
+                                let val = decode_integer(&mut arena, data, fuel_per_step);
+                                eprintln!("OUTPUT INT: {:?}", val);
+                            }
+                            Some(1) => {
+                                // String output
+                                let s = decode_string(&mut arena, data, fuel_per_step * 4);
+                                eprintln!("OUTPUT STRING: {:?}", s);
+                                if let Some(ref s) = s {
+                                    println!("{}", s);
+                                }
+                            }
+                            Some(2) => {
+                                // Image output
+                                eprintln!("OUTPUT IMAGE (quadtree)");
+                                // Render the image quadtree
+                                let sz = if grid_size > 0 { grid_size as usize } else { 128 };
+                                let mut pix = vec![128u8; sz * sz];
+                                let mut img_fuel = 500_000_000u64;
+                                let mut img_count = 0u64;
+                                render_image_quadtree(
+                                    &mut arena, data, &mut pix,
+                                    0, 0, sz, sz,
+                                    &mut img_fuel, &mut img_count,
+                                );
+                                eprintln!("  Rendered {} pixels", img_count);
+                                let fname = format!("{}_io_image_{}x{}.pgm", img_path, sz, sz);
+                                write_pgm(&fname, sz, sz, &pix);
+                            }
+                            _ => {
+                                eprintln!("OUTPUT with unknown p2={:?}", p2);
+                            }
+                        }
+
+                        current = cont;
+                    }
+                    Some(2) => {
+                        // Input instruction
+                        // Q = λx.continuation(x)
+                        eprintln!("INPUT requested (p2={:?})", p2);
+                        eprintln!("  Q node: {}", &describe(&arena, q, 0)[..200.min(describe(&arena, q, 0).len())]);
+
+                        // For now, try providing empty string input
+                        // We'll need to figure out the right key
+                        let input_val = make_false(&mut arena); // empty string = nil = KI
+                        let app = arena.alloc(APP, q, input_val);
+                        let mut fi = fuel_per_step;
+                        arena.whnf(app, &mut fi);
+                        current = arena.follow(app);
+                    }
+                    None => {
+                        eprintln!("Failed to decode p1 as Church number.");
+                        eprintln!("  Trying p1 as bool: {:?}", decode_bool(&mut arena, p1_node, fuel_per_step));
+                        eprintln!("  Trying p1 as Scott num: {:?}", decode_scott_num(&mut arena, p1_node, fuel_per_step));
+
+                        // Try alternative: maybe it's NOT a 1-arg tuple.
+                        // Maybe the encoding uses 2-arg pairs for tuples too?
+                        eprintln!("Trying 2-arg pair extraction for tag...");
+                        let mut fa = fuel_per_step;
+                        let p1_2arg = pair_fst(&mut arena, current, &mut fa);
+                        let mut fb = fuel_per_step;
+                        let p2_2arg = pair_snd(&mut arena, current, &mut fb);
+                        eprintln!("  2-arg fst: {}", describe(&arena, p1_2arg, 0));
+                        eprintln!("  2-arg snd: {}", &describe(&arena, p2_2arg, 0)[..200.min(describe(&arena, p2_2arg, 0).len())]);
+
+                        // Try Church decode on 2-arg extracted values
+                        let p1_alt = decode_church_num(&mut arena, p1_2arg, fuel_per_step);
+                        eprintln!("  2-arg fst as Church: {:?}", p1_alt);
+
+                        break;
+                    }
+                    _ => {
+                        eprintln!("Unknown p1 value: {:?}", p1);
+                        break;
+                    }
+                }
+            }
+        }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);
         }
@@ -2655,6 +2886,593 @@ fn pair1_snd(arena: &mut Arena, node: u32, fuel: &mut u64) -> u32 {
     let app = arena.alloc(APP, node, ki);
     arena.whnf(app, fuel);
     arena.follow(app)
+}
+
+/// Decode a Church numeral: Church n applied to f and x gives f^n(x).
+/// We apply to unique markers and count the chain depth.
+fn decode_church_num(arena: &mut Arena, node: u32, fuel: u64) -> Option<u64> {
+    let f_marker = arena.alloc(110, NIL, NIL);
+    let x_marker = arena.alloc(111, NIL, NIL);
+    let app1 = arena.alloc(APP, node, f_marker);
+    let app2 = arena.alloc(APP, app1, x_marker);
+    let mut f = fuel;
+    arena.whnf(app2, &mut f);
+    let mut cur = arena.follow(app2);
+    let mut count = 0u64;
+    loop {
+        if f == 0 { return None; }
+        let tag = arena.nodes[cur as usize].tag;
+        if tag == 111 {
+            return Some(count);
+        }
+        if tag == IND {
+            cur = arena.follow(cur);
+            continue;
+        }
+        if tag == APP {
+            let func = arena.follow(arena.nodes[cur as usize].a);
+            if arena.nodes[func as usize].tag == 110 {
+                count += 1;
+                // The argument (b) might be unreduced, e.g. APP(I, x_marker)
+                // Force its evaluation
+                let arg = arena.nodes[cur as usize].b;
+                arena.whnf(arg, &mut f);
+                cur = arena.follow(arg);
+                continue;
+            }
+            // func is not f_marker — try reducing this node further
+            arena.whnf(cur, &mut f);
+            cur = arena.follow(cur);
+            continue;
+        }
+        // Other tags (S, K, I, S1, S2, K1) — try to reduce
+        // This shouldn't happen if the Church numeral is well-formed
+        return None;
+    }
+}
+
+/// Decode an integer from a list of booleans (two's complement).
+/// Bit list convention: pair(bit, rest_bits) where pair_fst=bit, pair_snd=rest.
+/// (Same convention as decode_scott_num: fst=value, snd=rest.)
+/// nil (KI=false) terminates the list.
+/// Bits are collected from outermost (first extracted) to innermost.
+/// If outermost bit is LSB (built by pushing LSB first), we get [LSB, ..., MSB/sign].
+fn decode_integer(arena: &mut Arena, node: u32, fuel: u64) -> Option<i64> {
+    let mut bits: Vec<bool> = Vec::new();
+    let mut current = node;
+    let fuel_per_op = (fuel / 200).max(10000);
+    let mut remaining = fuel;
+
+    for _iter in 0..64 {
+        if remaining < fuel_per_op * 4 { break; }
+
+        // Check if current is nil (false/KI)
+        let is_nil = decode_bool(arena, current, fuel_per_op);
+        if is_nil == Some(false) {
+            break; // empty list = nil, end of bits
+        }
+
+        // Extract bit (fst) and rest (snd) — same convention as Scott numbers
+        let mut f1 = fuel_per_op;
+        let bit_node = pair_fst(arena, current, &mut f1);
+        remaining = remaining.saturating_sub(fuel_per_op - f1);
+
+        let bit = decode_bool(arena, bit_node, fuel_per_op);
+        match bit {
+            Some(b) => bits.push(b),
+            None => return None,
+        }
+
+        let mut f2 = fuel_per_op;
+        let rest = pair_snd(arena, current, &mut f2);
+        remaining = remaining.saturating_sub(fuel_per_op - f2);
+        current = rest;
+    }
+
+    if bits.is_empty() {
+        return Some(0);
+    }
+
+    // bits[0] is from outermost (first extracted bit), likely LSB.
+    // Last extracted bit (before nil) is the sign bit in two's complement.
+    // Actually, in the Scott number encoding: pair(bit0, pair(bit1, ... pair(false, nil)...))
+    // decode_scott_num treats this as bit0=LSB, and pair(false, nil) as terminator.
+    // For two's complement, the last bit before nil is the sign bit.
+    // So bits = [bit0(LSB), bit1, ..., bitN(MSB/sign)]
+    // But the last bit is the TERMINATOR false in decode_scott_num.
+    // In two's complement: the list just has the bits without a separate terminator.
+    // The last bit IS the sign bit.
+
+    // Interpretation: bits = [LSB, ..., MSB/sign]
+    let sign = bits[bits.len() - 1];
+    let mut n: i64 = 0;
+    for (i, &b) in bits.iter().enumerate() {
+        if i == bits.len() - 1 {
+            // Sign bit
+            if b {
+                n -= 1i64 << i;
+            }
+        } else if b {
+            n |= 1i64 << i;
+        }
+    }
+    Some(n)
+}
+
+/// Decode a string from a list of integers (character codes).
+/// Convention B: pair_fst=value(char), pair_snd=rest.
+fn decode_string(arena: &mut Arena, node: u32, fuel: u64) -> Option<String> {
+    let mut chars: Vec<char> = Vec::new();
+    let mut current = node;
+    let fuel_per_op = (fuel / 100).max(100000);
+    let mut remaining = fuel;
+
+    for _ in 0..10000 {
+        if remaining < fuel_per_op * 6 { break; }
+
+        // Check if nil
+        let is_nil = decode_bool(arena, current, fuel_per_op);
+        if is_nil == Some(false) {
+            break; // empty list
+        }
+
+        // Convention B: fst=value(char), snd=rest
+        let mut f1 = fuel_per_op;
+        let char_val = pair_fst(arena, current, &mut f1);
+        remaining = remaining.saturating_sub(fuel_per_op - f1);
+
+        let mut f2 = fuel_per_op;
+        let prev = pair_snd(arena, current, &mut f2);
+        remaining = remaining.saturating_sub(fuel_per_op - f2);
+
+        // Decode char as integer — try Scott number first (the program's native encoding)
+        if chars.len() < 5 {
+            let desc = describe(arena, char_val, 0);
+            eprintln!("  char[{}] val node: {}", chars.len(), &desc[..200.min(desc.len())]);
+        }
+        // Try Scott number decoding (pair-chain binary encoding from the program)
+        let ch_scott = decode_scott_num(arena, char_val, fuel_per_op * 3);
+        if chars.len() < 5 {
+            eprintln!("  char[{}] as Scott num: {:?}", chars.len(), ch_scott);
+        }
+        let ch = if let Some(n) = ch_scott {
+            Some(n as i64)
+        } else {
+            decode_integer(arena, char_val, fuel_per_op * 3)
+        };
+        if chars.len() < 5 {
+            eprintln!("  char[{}] decoded: {:?}", chars.len(), ch);
+        }
+        match ch {
+            Some(code) if code >= 0 && code < 0x110000 => {
+                if let Some(c) = char::from_u32(code as u32) {
+                    chars.push(c);
+                } else {
+                    chars.push('?');
+                }
+            }
+            Some(code) => {
+                eprintln!("  char code out of range: {}", code);
+                chars.push('?');
+            }
+            None => {
+                eprintln!("  failed to decode char");
+                chars.push('?');
+            }
+        }
+
+        current = prev;
+    }
+
+    // chars is collected outermost-first.
+    // If the string is built by pushing chars one at a time,
+    // outermost = last-pushed char.
+    // For a string "abc": push 'a', push 'b', push 'c'.
+    // outermost gives 'c', then 'b', then 'a'. So we need to reverse.
+    chars.reverse();
+    Some(chars.into_iter().collect())
+}
+
+/// Render image quadtree.
+/// Image node: (tuple bool_b NW NE SW SE) = λp. p(b)(NW)(NE)(SW)(SE)
+/// This is a 1-arg pair with 5 data fields.
+/// To extract field i, we pass a selector function.
+fn render_image_quadtree(
+    arena: &mut Arena,
+    node: u32,
+    pixels: &mut [u8],
+    x: usize,
+    y: usize,
+    size: usize,
+    img_width: usize,
+    fuel: &mut u64,
+    count: &mut u64,
+) {
+    if *fuel == 0 || size == 0 { return; }
+
+    // Check if it's a simple boolean (uniform color)
+    let is_bool = decode_bool(arena, node, (*fuel).min(200000));
+    match is_bool {
+        Some(false) => {
+            fill_rect(pixels, x, y, size, 255, img_width); // false = white
+            *count += (size * size) as u64;
+            return;
+        }
+        Some(true) => {
+            fill_rect(pixels, x, y, size, 0, img_width); // true = black
+            *count += (size * size) as u64;
+            return;
+        }
+        None => {}
+    }
+
+    // Extract the 5 fields of the image tuple:
+    // node(sel) = sel(b)(NW)(NE)(SW)(SE)
+    // To get b: sel = λa b c d e. a = K(K(K(K)))? No, need proper selectors.
+    // Easier approach: build selector for each field.
+    //
+    // sel_0 = λa b c d e. a — returns 1st arg
+    // For 5 args, sel_0(a)(b)(c)(d)(e) = a
+    // We can build: sel_0 = K applied strategically, but it's complex.
+    //
+    // Simpler: use 1-arg extraction successively.
+    // node(handler) = handler(b)(NW)(NE)(SW)(SE)
+    // If handler = K: K(b)(NW) = b. Then b(NE)(SW)(SE) — oops, extra args.
+    //
+    // Better: build actual selector combinators.
+    // sel0(a)(b)(c)(d)(e) = a: need to discard b,c,d,e
+    //   = λa.λb.λc.λd.λe. a
+    //   In SKI: K(K(K(K))) doesn't work simply.
+    //   Let's build: λa. K(K(K(a)))
+    //   K(K(K(a)))(b) = K(K(a)), (c) = K(a), (d) = a, ... wait needs 5 total.
+    //
+    // Actually for 5 args:
+    //   sel0 = λa b c d e. a
+    //   = λa. λb. K a ... no:
+    //   λe. a = K a (since e not free in a)
+    //   λd. K a = K(K a) (since d not free)
+    //   λc. K(K a) = K(K(K a)) (since c not free)
+    //   λb. K(K(K a)) = K(K(K(K a))) ... wait that's too many K's.
+    //   λa. K(K(K(K a))) — but 'a' IS free here!
+    //   bracket[a](K(K(K(K a)))) = S(bracket[a](K(K(K(K)))))(bracket[a](a))
+    //     = S(K(K(K(K(K)))))(I)
+    //
+    // So sel0 = S(K(K(K(K(K)))))(I)? Let me verify:
+    // sel0(a) = K(K(K(K(K))))(a)(I(a)) = K(K(K(K)))(I(a)) = K(K(K(K)))(a)
+    // Hmm that's not right. Let me just build them programmatically.
+
+    // Build selector for 5-tuple field i (0-indexed):
+    // sel_i(x0)(x1)(x2)(x3)(x4) = x_i
+    // Implementation: apply node to a handler that captures the right field.
+
+    // For extracting field 0 (bool b):
+    // We need: handler(b)(NW)(NE)(SW)(SE) = b
+    // handler = λa b c d e. a
+    // Build as: a function that takes 5 args and returns the first.
+    // We can use K chains: need to absorb 4 extra args after the first.
+    // handler(a) should return λb c d e. a = K(K(K(a)))
+    // So handler = λa. K(K(K(a))) = B(B(B(K)))(K)(K) ... complex in SKI.
+    //
+    // Alternatively, just evaluate in multiple steps:
+    // Step 1: node(marker) to see what the marker receives
+    // But marker(b)(NW)(NE)(SW)(SE) = APP chain, not reduced.
+    //
+    // Best approach: build lambda-style selectors in the arena.
+
+    // Build selector: takes 5 args, returns the one at position `pos`.
+    fn build_sel5(arena: &mut Arena, pos: usize) -> u32 {
+        // λx0 x1 x2 x3 x4. x_pos
+        // We build this as nested K / I combinators.
+        // For each argument after pos: wrap in K
+        // For pos itself: identity
+        // For arguments before pos: wrap in K(K(...))
+        //
+        // Alternative: just build 5 unique markers, create the applications,
+        // and pick out the right one.
+        // Actually the simplest correct approach:
+        // Use the S/K/I encoding of λx0.λx1.λx2.λx3.λx4. x_{pos}
+
+        // For pos=0: λa b c d e. a
+        // After abstracting e from a: K a
+        // After abstracting d from K a: K(K a)
+        // After abstracting c: K(K(K a))
+        // After abstracting b: K(K(K(K a)))
+        // After abstracting a from K(K(K(K a))):
+        //   bracket[a](K(K(K(K(a))))) = S (K(K(K(K(K))))) I
+        //   because K(K(K(K(a)))) = K(K(K(K))) applied to a... wait no.
+        //   K(K(K(K(a)))) = APP(K, APP(K, APP(K, APP(K, a))))
+        //   bracket[a] of this:
+        //     = S(bracket[a](K))(bracket[a](APP(K, APP(K, APP(K, a)))))
+        //     This gets recursive and complex.
+        //
+        // Let me just hardcode the selectors. They're small.
+
+        match pos {
+            0 => {
+                // λa b c d e. a
+                // = λa. K(K(K(K(a))))
+                // More precisely, let me build it step by step.
+                // Start with inner: x (a variable, let's use a marker)
+                // λe.x = K x
+                // λd.(K x) = K (K x)
+                // λc.K(K x) = K(K(K x))
+                // λb.K(K(K x)) = K(K(K(K x)))
+                // λa.K(K(K(K a))) -- now 'a' is free:
+                //   = S (K (K (K (K K)))) I ... nope, need actual computation.
+                //
+                // Let me try a different approach: just build APP chains.
+                // node(sel0) where sel0 takes 5 args and returns first.
+                // I'll use: sel0 = λa.λb.λc.λd.λe. a
+                // In SKI: I need to find the right combinator.
+                // Actually, it's easiest to just evaluate node applied to
+                // (λb c d e. x) for a fresh x, but we can't build lambdas directly.
+                //
+                // Simplest practical approach: use nested evaluation.
+                // Apply node to 5 markers, evaluate, pick out which marker appears.
+                // Then for extracting the actual value, we use a cleverer trick:
+                //
+                // Apply node to (λb c d e. RESULT) where RESULT is a side-channel.
+                // In SKI: we need handler(a) = K(K(K(K(a))))
+                //   = a needs to survive 4 more applications.
+                //
+                // K(K(K(K(a))))(b) = K(K(K(a)))
+                // K(K(K(a)))(c) = K(K(a))
+                // K(K(a))(d) = K(a)
+                // K(a)(e) = a  ✓
+                //
+                // So handler = λa. K(K(K(K(a))))
+                // = (B K (B K (B K K))) where B = S(KS)K
+                // Or more simply: compose K four times.
+                //
+                // Let me build K∘K∘K∘K in the arena:
+                // f(x) = K(K(K(K(x))))
+                // f = B(K, B(K, B(K, K))) where B(f,g)(x) = f(g(x))
+                // B = S(KS)K
+                //
+                // Or: f = S(K(S(K(S(K(KK))))))(I) ... too complex.
+                //
+                // Practical: build a node that when applied gives K(K(K(K(a)))).
+                // node(handler)(rest...) → handler(a)(rest...)
+                // So if we make handler that when given a, returns K^4(a):
+                // We need: handler(a)(b)(c)(d)(e) = a
+                //
+                // Construct handler as: S(K(K))(S(K(K))(S(K(K))(K)))
+                // Hmm I'm overcomplicating this. Let me just use an iterative approach.
+
+                // Build: λx. K(K(K(K(x))))
+                // = S(K(K(K(K(K)))))(I) ... let me verify:
+                // S(K(K(K(K(K)))))(I)(x) = K(K(K(K(K))))(x)(I(x)) = K(K(K(K)))(x) ... no.
+
+                // Actually, I think the cleanest approach is to use the arena to
+                // build the combinator via repeated composition.
+                // K4(x) = K(K(K(K(x))))
+                // This is (K ∘ K ∘ K ∘ K)(x)
+                // In SKI: compose f g = S(Kf)g (= B f g where B = S(KS)K)
+                // But that's for B(f)(g)(x) = f(g(x)).
+                //
+                // K4 = B(K, B(K, B(K, K)))
+                // B(K, K)(x) = K(K(x)) = K∘K
+                // B(K, B(K, K))(x) = K(K(K(x))) = K∘K∘K
+                // B(K, B(K, B(K, K)))(x) = K(K(K(K(x)))) = K∘K∘K∘K ✓
+                //
+                // B(f, g) = S(Kf)(g)
+
+                // B(K, K):
+                let _k = arena.alloc(K, NIL, NIL);
+                let s = arena.alloc(S, NIL, NIL);
+                let k1a = arena.alloc(K, NIL, NIL);
+                let k1b = arena.alloc(K, NIL, NIL);
+                let kk_inner = arena.alloc(APP, k1a, k1b); // K(K)
+                let s_kk = arena.alloc(APP, s, kk_inner);
+                let k1c = arena.alloc(K, NIL, NIL);
+                let bkk = arena.alloc(APP, s_kk, k1c);
+                // B(K, K) = S(K(K))(K)
+
+                // B(K, B(K, K)):
+                let s2 = arena.alloc(S, NIL, NIL);
+                let k2a = arena.alloc(K, NIL, NIL);
+                let k2b = arena.alloc(K, NIL, NIL);
+                let kk2 = arena.alloc(APP, k2a, k2b);
+                let s2_kk2 = arena.alloc(APP, s2, kk2);
+                let bk_bkk = arena.alloc(APP, s2_kk2, bkk);
+
+                // B(K, B(K, B(K, K))):
+                let s3 = arena.alloc(S, NIL, NIL);
+                let k3a = arena.alloc(K, NIL, NIL);
+                let k3b = arena.alloc(K, NIL, NIL);
+                let kk3 = arena.alloc(APP, k3a, k3b);
+                let s3_kk3 = arena.alloc(APP, s3, kk3);
+                arena.alloc(APP, s3_kk3, bk_bkk)
+            }
+            _ => {
+                // For other positions, we need different selectors.
+                // pos=1: λa b c d e. b = K(λb c d e. b) ... hmm, we want to skip a.
+                // Actually: apply K to sel0_of_4 (which selects first of 4 args).
+                // sel1 = K(sel0_of_4) where sel0_of_4 = B(K, B(K, K)) (select first of 4)
+                //
+                // For simplicity, let me build it for each case.
+                // pos=1: λa b. K(K(K(b))) applied as K(B(K, B(K, K)))
+                // pos=2: λa b c. K(K(c)) applied as K(K(B(K, K)))
+                // pos=3: λa b c d. K(d) applied as K(K(K(K)))
+                // pos=4: λa b c d e. e applied as K(K(K(K(I)))) ... = K(K(K(KI)))
+
+                // Hmm this is getting complicated. Let me use a simpler runtime approach.
+                // I'll just apply the node to 5 fresh variable nodes and
+                // evaluate, then extract the right one by position.
+                // This doesn't work because the variables get applied to each other.
+                //
+                // Better approach: Use a sequence of pair1_fst / pair1_snd like operations
+                // but adapted for 5-tuples.
+                //
+                // tuple5(a,b,c,d,e)(K) = K(a)(b)(c)(d)(e) = a(c)(d)(e) — polluted
+                //
+                // For image rendering, I actually don't need individual selectors.
+                // I can use a single handler that captures all 5 values:
+                // node(λa b c d e. marker(a)(b)(c)(d)(e))
+                // But I can't build lambdas in the arena easily.
+                //
+                // SIMPLEST APPROACH: Apply node to a function that stores all 5 values.
+                // Actually, let me just recursively extract using pair-like operations.
+                //
+                // tuple5(a,b,c,d,e)(K) = K(a)(b)(c)(d)(e) = a (with extra args b,c,d,e polluting)
+                // This doesn't work cleanly.
+                //
+                // Let me use the proper selector approach.
+
+                // For pos=1-4, I'll build K^(pos) composed with the (5-pos-1)-absorber.
+                // sel_i = K^i ∘ absorb_{4-i}
+                // where absorb_n(x)(y1)...(yn) = x
+
+                // absorb_0 = I (identity)
+                // absorb_1 = K
+                // absorb_2 = K∘K = B(K,K)
+                // absorb_3 = K∘K∘K = B(K,B(K,K))
+
+                // Then sel_i(x0)(x1)...(x4) = K^i(absorb_{4-i})(x0)(x1)...(x4)
+                // K^i(f)(x0)...(x_{i-1}) = f applied with x_{i-1} discarded i times
+                // Hmm, K^i doesn't work that way.
+
+                // Let me think differently.
+                // sel_0(a)(b)(c)(d)(e) = a → need to absorb b,c,d,e after a
+                //   = λa. K(K(K(K(a)))) — absorb 4 after
+                // sel_1(a)(b)(c)(d)(e) = b → skip a, then absorb c,d,e after b
+                //   = K(λb. K(K(K(b)))) = K(absorb_3_selector)
+                // sel_2(a)(b)(c)(d)(e) = c → skip a,b, absorb d,e after c
+                //   = K(K(λc. K(K(c)))) = K(K(absorb_2_selector))
+                // sel_3 = K(K(K(λd. K(d)))) = K(K(K(K)))
+                // sel_4 = K(K(K(K(I)))) = K(K(K(KI)))
+
+                // Let me verify sel_3 = K(K(K(K))):
+                // K(K(K(K)))(a) = K(K(K))
+                // K(K(K))(b) = K(K)
+                // K(K)(c) = K
+                // K(d) = λe.d ... K(d)(e) = d ✓ → sel_3 selects 4th arg (index 3)
+
+                // sel_4 = K(K(K(KI))):
+                // K(K(K(KI)))(a) = K(K(KI))
+                // K(K(KI))(b) = K(KI)
+                // K(KI)(c) = KI
+                // KI(d) = I
+                // I(e) = e ✓ → sel_4 selects 5th arg (index 4)
+
+                // Now sel_1 = K(B(K, B(K, K))):
+                // K(f)(a) = f (skip a)
+                // f(b)(c)(d)(e) should return b
+                // f = absorb_3_selector = B(K, B(K, K)) = λx. K(K(K(x)))
+                // f(b) = K(K(K(b)))
+                // K(K(K(b)))(c) = K(K(b))
+                // K(K(b))(d) = K(b)
+                // K(b)(e) = b ✓
+
+                // sel_2 = K(K(B(K, K))):
+                // K(K(g))(a) = K(g)
+                // K(g)(b) = g
+                // g(c)(d)(e) should return c
+                // g = B(K,K) = λx. K(K(x))
+                // g(c) = K(K(c))
+                // K(K(c))(d) = K(c)
+                // K(c)(e) = c ✓
+
+                match pos {
+                    1 => {
+                        // sel_1 = K(B(K, B(K, K)))
+                        // B(K, K) = S(K(K))(K)
+                        let s1 = arena.alloc(S, NIL, NIL);
+                        let k1a = arena.alloc(K, NIL, NIL);
+                        let k1b = arena.alloc(K, NIL, NIL);
+                        let kk1 = arena.alloc(APP, k1a, k1b);
+                        let s1_kk1 = arena.alloc(APP, s1, kk1);
+                        let k1c = arena.alloc(K, NIL, NIL);
+                        let bkk = arena.alloc(APP, s1_kk1, k1c);
+                        // B(K, B(K,K)) = S(K(K))(B(K,K))
+                        let s2 = arena.alloc(S, NIL, NIL);
+                        let k2a = arena.alloc(K, NIL, NIL);
+                        let k2b = arena.alloc(K, NIL, NIL);
+                        let kk2 = arena.alloc(APP, k2a, k2b);
+                        let s2_kk2 = arena.alloc(APP, s2, kk2);
+                        let bk_bkk = arena.alloc(APP, s2_kk2, bkk);
+                        // K(B(K, B(K,K)))
+                        let k_outer = arena.alloc(K, NIL, NIL);
+                        arena.alloc(APP, k_outer, bk_bkk)
+                    }
+                    2 => {
+                        // sel_2 = K(K(B(K, K)))
+                        // B(K,K) = S(K(K))(K)
+                        let s1 = arena.alloc(S, NIL, NIL);
+                        let k1a = arena.alloc(K, NIL, NIL);
+                        let k1b = arena.alloc(K, NIL, NIL);
+                        let kk1 = arena.alloc(APP, k1a, k1b);
+                        let s1_kk1 = arena.alloc(APP, s1, kk1);
+                        let k1c = arena.alloc(K, NIL, NIL);
+                        let bkk = arena.alloc(APP, s1_kk1, k1c);
+                        // K(B(K,K))
+                        let k1 = arena.alloc(K, NIL, NIL);
+                        let k_bkk = arena.alloc(APP, k1, bkk);
+                        // K(K(B(K,K)))
+                        let k2 = arena.alloc(K, NIL, NIL);
+                        arena.alloc(APP, k2, k_bkk)
+                    }
+                    3 => {
+                        // sel_3 = K(K(K(K)))
+                        let k1 = arena.alloc(K, NIL, NIL);
+                        let k2 = arena.alloc(K, NIL, NIL);
+                        let kk = arena.alloc(APP, k1, k2);
+                        let k3 = arena.alloc(K, NIL, NIL);
+                        let kkk = arena.alloc(APP, k3, kk);
+                        let k4 = arena.alloc(K, NIL, NIL);
+                        arena.alloc(APP, k4, kkk)
+                    }
+                    4 => {
+                        // sel_4 = K(K(K(KI)))
+                        let ki = make_false(arena);
+                        let k1 = arena.alloc(K, NIL, NIL);
+                        let k_ki = arena.alloc(APP, k1, ki);
+                        let k2 = arena.alloc(K, NIL, NIL);
+                        let kk_ki = arena.alloc(APP, k2, k_ki);
+                        let k3 = arena.alloc(K, NIL, NIL);
+                        arena.alloc(APP, k3, kk_ki)
+                    }
+                    _ => unreachable!()
+                }
+            }
+        }
+    }
+
+    // Extract field at position pos from 5-tuple node.
+    fn extract_tuple5(arena: &mut Arena, node: u32, pos: usize, fuel: &mut u64) -> u32 {
+        let sel = build_sel5(arena, pos);
+        let app = arena.alloc(APP, node, sel);
+        arena.whnf(app, fuel);
+        arena.follow(app)
+    }
+
+    if size <= 1 {
+        // At pixel level: extract bool_b (field 0)
+        let b_val = extract_tuple5(arena, node, 0, fuel);
+        let b = decode_bool(arena, b_val, (*fuel).min(200000));
+        let color = match b {
+            Some(true) => 0u8,   // true = black
+            Some(false) => 255u8, // false = white
+            None => 128u8,        // unknown
+        };
+        if x < img_width && y < img_width {
+            pixels[y * img_width + x] = color;
+        }
+        *count += 1;
+        return;
+    }
+
+    // Extract 4 quadrant children (fields 1-4): NW, NE, SW, SE
+    let nw = extract_tuple5(arena, node, 1, fuel);
+    let ne = extract_tuple5(arena, node, 2, fuel);
+    let sw = extract_tuple5(arena, node, 3, fuel);
+    let se = extract_tuple5(arena, node, 4, fuel);
+
+    let half = size / 2;
+    render_image_quadtree(arena, nw, pixels, x, y, half, img_width, fuel, count);
+    render_image_quadtree(arena, ne, pixels, x + half, y, half, img_width, fuel, count);
+    render_image_quadtree(arena, sw, pixels, x, y + half, half, img_width, fuel, count);
+    render_image_quadtree(arena, se, pixels, x + half, y + half, half, img_width, fuel, count);
 }
 
 /// Render diamond quadtree to pixel buffer.
