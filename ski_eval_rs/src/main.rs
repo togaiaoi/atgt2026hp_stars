@@ -659,9 +659,12 @@ fn main() {
     let input_len = input.len();
     eprintln!("  {} bytes", input_len);
 
-    // Pre-allocate arena: 1.5B nodes × 12B = 18GB.
-    // snapshot (123M × 12B = 1.5GB) + arena = ~19.5GB total, fits in 32GB.
-    let estimated_nodes = 1_500_000_000usize;
+    // Pre-allocate arena.
+    let estimated_nodes = if decode_mode == "analyze" {
+        50_000_000usize  // 50M × 12B = 600MB (enough for I/O + analysis)
+    } else {
+        1_500_000_000usize  // 1.5B × 12B = 18GB (for full rendering)
+    };
     let mut arena = Arena::new(estimated_nodes);
 
     eprintln!("Parsing...");
@@ -2604,7 +2607,7 @@ fn main() {
                 write_pgm(&fname, sz, sz, &pix);
             }
         }
-        "io" => {
+        "io" | "analyze" | "trace-image" => {
             // I/O interpreter based on hint-new.md
             // Output = (tuple (tuple p1 p2) Q) = pair1(pair1(p1, p2), Q)
             // p1, p2 are Church-encoded numbers
@@ -2804,6 +2807,330 @@ fn main() {
                                     println!("{}", s);
                                 }
                             }
+                            Some(2) if decode_mode == "analyze" => {
+                                // Analyze image data subgraph structure
+                                eprintln!("=== IMAGE DATA ANALYSIS ===");
+                                eprintln!("  Image data node index: {}", data);
+                                eprintln!("  Arena nodes at this point: {}", arena.nodes.len());
+
+                                let data_follow = arena.follow(data);
+                                let tag_names = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
+
+                                eprintln!("  data node: idx={}, tag={}",
+                                    data_follow,
+                                    tag_names.get(arena.nodes[data_follow as usize].tag as usize).unwrap_or(&"?"));
+
+                                // === PATTERN MATCHING APPROACH ===
+                                // A Church 5-tuple λf. f(a)(b)(c)(d)(e) compiles to:
+                                //   S(S(S(S(SI(Ka))(Kb))(Kc))(Kd))(Ke)
+                                // In the arena (raw, unevaluated), this is a tree of APPs:
+                                //   APP(APP(S, X4), APP(K, e))      ← e = field 4 (SE)
+                                //     X4 = APP(APP(S, X3), APP(K, d))  ← d = field 3 (SW)
+                                //       X3 = APP(APP(S, X2), APP(K, c)) ← c = field 2 (NE)
+                                //         X2 = APP(APP(S, X1), APP(K, b)) ← b = field 1 (NW)
+                                //           X1 = APP(APP(S, I), APP(K, a)) ← a = field 0 (COND)
+                                //
+                                // Pattern for each level:
+                                //   node = APP(lhs, rhs)
+                                //   rhs = APP(K, field_value)    → K1 tag or APP(K, val)
+                                //   lhs = APP(S, next_level)     → S1 tag or APP(S, next)
+                                // Innermost:
+                                //   X1 = APP(APP(S, I), APP(K, a))
+                                //     lhs_inner = APP(S, I) → SI
+                                //     rhs_inner = APP(K, a) → Ka
+
+                                eprintln!("\n=== DIAMOND PATTERN MATCH (no evaluation) ===");
+
+                                // Try to extract 5-tuple fields by pure pattern matching
+                                fn extract_diamond_fields(arena: &Arena, node: u32) -> Option<[u32; 5]> {
+                                    // Helper: follow IND chains
+                                    fn follow(arena: &Arena, mut idx: u32) -> u32 {
+                                        loop {
+                                            let n = arena.nodes[idx as usize];
+                                            if n.tag == IND { idx = n.a; } else { return idx; }
+                                        }
+                                    }
+                                    // Helper: extract field from APP(K, val) or K1(val)
+                                    fn extract_k_val(arena: &Arena, node: u32) -> Option<u32> {
+                                        let n = arena.nodes[follow(arena, node) as usize];
+                                        if n.tag == K1 { return Some(follow(arena, n.a)); }
+                                        if n.tag == APP && arena.nodes[follow(arena, n.a) as usize].tag == K {
+                                            return Some(follow(arena, n.b));
+                                        }
+                                        None
+                                    }
+                                    // Helper: extract inner from APP(S, inner) or S1(inner)
+                                    fn extract_s_inner(arena: &Arena, node: u32) -> Option<u32> {
+                                        let n = arena.nodes[follow(arena, node) as usize];
+                                        if n.tag == S1 { return Some(follow(arena, n.a)); }
+                                        if n.tag == APP && arena.nodes[follow(arena, n.a) as usize].tag == S {
+                                            return Some(follow(arena, n.b));
+                                        }
+                                        None
+                                    }
+
+                                    // node = APP(APP(S, X4), APP(K, e))
+                                    let node = follow(arena, node);
+                                    let n = arena.nodes[node as usize];
+                                    if n.tag != APP { return None; }
+                                    let lhs = follow(arena, n.a);
+                                    let rhs = follow(arena, n.b);
+
+                                    let e = extract_k_val(arena, rhs)?;
+                                    let x4 = extract_s_inner(arena, lhs)?;
+
+                                    // X4 = APP(APP(S, X3), APP(K, d))
+                                    let x4_n = arena.nodes[follow(arena, x4) as usize];
+                                    if x4_n.tag != APP { return None; }
+                                    let d = extract_k_val(arena, follow(arena, x4_n.b))?;
+                                    let x3 = extract_s_inner(arena, follow(arena, x4_n.a))?;
+
+                                    // X3 = APP(APP(S, X2), APP(K, c))
+                                    let x3_n = arena.nodes[follow(arena, x3) as usize];
+                                    if x3_n.tag != APP { return None; }
+                                    let c = extract_k_val(arena, follow(arena, x3_n.b))?;
+                                    let x2 = extract_s_inner(arena, follow(arena, x3_n.a))?;
+
+                                    // X2 = APP(APP(S, X1), APP(K, b))
+                                    let x2_n = arena.nodes[follow(arena, x2) as usize];
+                                    if x2_n.tag != APP { return None; }
+                                    let b = extract_k_val(arena, follow(arena, x2_n.b))?;
+                                    let x1 = extract_s_inner(arena, follow(arena, x2_n.a))?;
+
+                                    // X1 = APP(APP(S, I), APP(K, a))  — innermost
+                                    let x1_n = arena.nodes[follow(arena, x1) as usize];
+                                    if x1_n.tag != APP { return None; }
+                                    let a = extract_k_val(arena, follow(arena, x1_n.b))?;
+                                    // lhs1 should be APP(S, I) or S1(I)
+                                    let lhs1 = follow(arena, x1_n.a);
+                                    let lhs1_n = arena.nodes[lhs1 as usize];
+                                    if lhs1_n.tag == S1 {
+                                        if arena.nodes[follow(arena, lhs1_n.a) as usize].tag != I { return None; }
+                                    } else if lhs1_n.tag == APP {
+                                        if arena.nodes[follow(arena, lhs1_n.a) as usize].tag != S { return None; }
+                                        if arena.nodes[follow(arena, lhs1_n.b) as usize].tag != I { return None; }
+                                    } else { return None; }
+
+                                    Some([a, b, c, d, e])  // [COND, NW, NE, SW, SE]
+                                }
+
+                                // Helper: follow IND chains (standalone for use outside extract_diamond_fields)
+                                fn follow_ind(arena: &Arena, mut idx: u32) -> u32 {
+                                    loop {
+                                        let n = arena.nodes[idx as usize];
+                                        if n.tag == IND { idx = n.a; } else { return idx; }
+                                    }
+                                }
+
+                                // Check if a node matches S(KK)I (= true)
+                                fn is_ski_true(arena: &Arena, node: u32) -> bool {
+                                    let node = follow_ind(arena, node);
+                                    let n = arena.nodes[node as usize];
+                                    if n.tag == S2 {
+                                        if arena.nodes[follow_ind(arena, n.b) as usize].tag != I { return false; }
+                                        let a = follow_ind(arena, n.a);
+                                        let a_n = arena.nodes[a as usize];
+                                        if a_n.tag == K1 { return arena.nodes[follow_ind(arena, a_n.a) as usize].tag == K; }
+                                        if a_n.tag == APP {
+                                            return arena.nodes[follow_ind(arena, a_n.a) as usize].tag == K
+                                                && arena.nodes[follow_ind(arena, a_n.b) as usize].tag == K;
+                                        }
+                                        return false;
+                                    }
+                                    if n.tag != APP { return false; }
+                                    if arena.nodes[follow_ind(arena, n.b) as usize].tag != I { return false; }
+                                    let lhs_idx = follow_ind(arena, n.a);
+                                    let lhs = arena.nodes[lhs_idx as usize];
+                                    if lhs.tag == S1 {
+                                        let a = follow_ind(arena, lhs.a);
+                                        let a_n = arena.nodes[a as usize];
+                                        if a_n.tag == K1 { return arena.nodes[follow_ind(arena, a_n.a) as usize].tag == K; }
+                                        if a_n.tag == APP {
+                                            return arena.nodes[follow_ind(arena, a_n.a) as usize].tag == K
+                                                && arena.nodes[follow_ind(arena, a_n.b) as usize].tag == K;
+                                        }
+                                        return false;
+                                    }
+                                    if lhs.tag != APP { return false; }
+                                    if arena.nodes[follow_ind(arena, lhs.a) as usize].tag != S { return false; }
+                                    let kk_idx = follow_ind(arena, lhs.b);
+                                    let kk = arena.nodes[kk_idx as usize];
+                                    if kk.tag == K1 { return arena.nodes[follow_ind(arena, kk.a) as usize].tag == K; }
+                                    if kk.tag == APP {
+                                        return arena.nodes[follow_ind(arena, kk.a) as usize].tag == K
+                                            && arena.nodes[follow_ind(arena, kk.b) as usize].tag == K;
+                                    }
+                                    false
+                                }
+
+                                // Check if a node matches KI (= false)
+                                fn is_ski_false(arena: &Arena, node: u32) -> bool {
+                                    let node = follow_ind(arena, node);
+                                    let n = arena.nodes[node as usize];
+                                    if n.tag == K1 {
+                                        return arena.nodes[follow_ind(arena, n.a) as usize].tag == I;
+                                    }
+                                    if n.tag == APP {
+                                        return arena.nodes[follow_ind(arena, n.a) as usize].tag == K
+                                            && arena.nodes[follow_ind(arena, n.b) as usize].tag == I;
+                                    }
+                                    false
+                                }
+
+                                let fields = extract_diamond_fields(&arena, data_follow);
+                                match fields {
+                                    Some([a, b, c, d, e]) => {
+                                        eprintln!("  SUCCESS: Diamond pattern matched!");
+                                        eprintln!("  COND (a): idx={}, tag={}", a, tag_names.get(arena.nodes[a as usize].tag as usize).unwrap_or(&"?"));
+                                        eprintln!("  NW   (b): idx={}, tag={}", b, tag_names.get(arena.nodes[b as usize].tag as usize).unwrap_or(&"?"));
+                                        eprintln!("  NE   (c): idx={}, tag={}", c, tag_names.get(arena.nodes[c as usize].tag as usize).unwrap_or(&"?"));
+                                        eprintln!("  SW   (d): idx={}, tag={}", d, tag_names.get(arena.nodes[d as usize].tag as usize).unwrap_or(&"?"));
+                                        eprintln!("  SE   (e): idx={}, tag={}", e, tag_names.get(arena.nodes[e as usize].tag as usize).unwrap_or(&"?"));
+                                        eprintln!("  COND is true?  {}", is_ski_true(&arena, a));
+                                        eprintln!("  COND is false? {}", is_ski_false(&arena, a));
+
+                                        // Recursively check children
+                                        let child_names = ["NW", "NE", "SW", "SE"];
+                                        for (ci, &child) in [b, c, d, e].iter().enumerate() {
+                                            let cf = extract_diamond_fields(&arena, child);
+                                            match cf {
+                                                Some([ca, _, _, _, _]) => {
+                                                    eprintln!("  {} is diamond: COND true={} false={}",
+                                                        child_names[ci],
+                                                        is_ski_true(&arena, ca),
+                                                        is_ski_false(&arena, ca));
+                                                }
+                                                None => {
+                                                    eprintln!("  {} is NOT diamond pattern (tag={})",
+                                                        child_names[ci],
+                                                        tag_names.get(arena.nodes[child as usize].tag as usize).unwrap_or(&"?"));
+                                                }
+                                            }
+                                        }
+
+                                        // Recursive quadtree depth probe via pattern matching
+                                        eprintln!("\n=== QUADTREE DEPTH PROBE (NW path, pattern match) ===");
+                                        let mut probe = data_follow;
+                                        for depth in 0..30 {
+                                            let pf = extract_diamond_fields(&arena, probe);
+                                            match pf {
+                                                Some([cond, nw, _ne, _sw, _se]) => {
+                                                    let ct = is_ski_true(&arena, cond);
+                                                    let cf = is_ski_false(&arena, cond);
+                                                    eprintln!("  depth {}: COND true={} false={}, NW tag={}",
+                                                        depth, ct, cf,
+                                                        tag_names.get(arena.nodes[nw as usize].tag as usize).unwrap_or(&"?"));
+                                                    // Check if NW is also a diamond
+                                                    let nw_diamond = extract_diamond_fields(&arena, nw);
+                                                    if nw_diamond.is_none() {
+                                                        eprintln!("    NW is NOT a diamond → leaf reached");
+                                                        // Check if NW itself is true/false
+                                                        eprintln!("    NW is true?  {}", is_ski_true(&arena, nw));
+                                                        eprintln!("    NW is false? {}", is_ski_false(&arena, nw));
+                                                        break;
+                                                    }
+                                                    probe = nw;
+                                                }
+                                                None => {
+                                                    eprintln!("  depth {}: NOT a diamond (tag={}), stopping",
+                                                        depth,
+                                                        tag_names.get(arena.nodes[probe as usize].tag as usize).unwrap_or(&"?"));
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        // Full quadtree statistics via pattern matching
+                                        eprintln!("\n=== FULL QUADTREE SCAN (pattern match) ===");
+                                        let mut qt_stack: Vec<(u32, usize)> = vec![(data_follow, 0)];
+                                        let mut max_qt_depth = 0usize;
+                                        let mut branch_count = 0u64;
+                                        let mut leaf_true = 0u64;
+                                        let mut leaf_false = 0u64;
+                                        let mut leaf_unknown = 0u64;
+                                        let mut non_diamond = 0u64;
+                                        while let Some((n, d)) = qt_stack.pop() {
+                                            if d > max_qt_depth { max_qt_depth = d; }
+                                            match extract_diamond_fields(&arena, n) {
+                                                Some([cond, nw, ne, sw, se]) => {
+                                                    let ct = is_ski_true(&arena, cond);
+                                                    let cf = is_ski_false(&arena, cond);
+                                                    if ct || cf {
+                                                        // It's a valid diamond node
+                                                        branch_count += 1;
+                                                        if d < 26 { // safety limit
+                                                            qt_stack.push((nw, d + 1));
+                                                            qt_stack.push((ne, d + 1));
+                                                            qt_stack.push((sw, d + 1));
+                                                            qt_stack.push((se, d + 1));
+                                                        }
+                                                    } else {
+                                                        // Diamond pattern but COND is not simple true/false
+                                                        leaf_unknown += 1;
+                                                        if d <= 3 {
+                                                            eprintln!("  depth {}: diamond with complex COND (idx={})", d, cond);
+                                                            eprintln!("    describe(cond, 4): {}", describe(&arena, cond, 4));
+                                                        }
+                                                    }
+                                                }
+                                                None => {
+                                                    // Not a diamond - check if it's true/false (leaf value)
+                                                    if is_ski_true(&arena, n) {
+                                                        leaf_true += 1;
+                                                    } else if is_ski_false(&arena, n) {
+                                                        leaf_false += 1;
+                                                    } else {
+                                                        non_diamond += 1;
+                                                        if non_diamond <= 5 {
+                                                            eprintln!("  depth {}: non-diamond node tag={} idx={}",
+                                                                d, tag_names.get(arena.nodes[n as usize].tag as usize).unwrap_or(&"?"), n);
+                                                            eprintln!("    describe(4): {}", describe(&arena, n, 4));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (branch_count + leaf_true + leaf_false + leaf_unknown + non_diamond) % 100_000 == 0 {
+                                                eprintln!("  ... branches={} leaves_t={} leaves_f={} unknown={} non_diamond={} max_d={}",
+                                                    branch_count, leaf_true, leaf_false, leaf_unknown, non_diamond, max_qt_depth);
+                                            }
+                                        }
+                                        eprintln!("\n=== QUADTREE SUMMARY ===");
+                                        eprintln!("  Branch nodes: {}", branch_count);
+                                        eprintln!("  Leaf true (white): {}", leaf_true);
+                                        eprintln!("  Leaf false (black): {}", leaf_false);
+                                        eprintln!("  Unknown COND: {}", leaf_unknown);
+                                        eprintln!("  Non-diamond: {}", non_diamond);
+                                        eprintln!("  Max depth: {}", max_qt_depth);
+                                    }
+                                    None => {
+                                        eprintln!("  FAILED: Root does not match diamond pattern");
+
+                                        // Deep trace with IND following
+                                        fn trace_node(arena: &Arena, idx: u32, depth: usize, tag_names: &[&str; 8], prefix: &str) {
+                                            if depth > 8 { eprintln!("{}...", prefix); return; }
+                                            let real = follow_ind(arena, idx);
+                                            let n = arena.nodes[real as usize];
+                                            let tname = tag_names.get(n.tag as usize).unwrap_or(&"?");
+                                            match n.tag {
+                                                APP => {
+                                                    eprintln!("{}APP (idx={} real={})", prefix, idx, real);
+                                                    trace_node(arena, n.a, depth + 1, tag_names, &format!("{}  .a=", prefix));
+                                                    trace_node(arena, n.b, depth + 1, tag_names, &format!("{}  .b=", prefix));
+                                                }
+                                                _ => {
+                                                    eprintln!("{}{} (idx={} real={} a={} b={})", prefix, tname, idx, real, n.a, n.b);
+                                                }
+                                            }
+                                        }
+                                        eprintln!("\n  === DETAILED NODE TRACE ===");
+                                        trace_node(&arena, data_follow, 0, &tag_names, "  ");
+                                        eprintln!("  describe(10): {}", &describe(&arena, data_follow, 10)[..3000.min(describe(&arena, data_follow, 10).len())]);
+                                    }
+                                }
+
+                                eprintln!("\n=== ANALYSIS COMPLETE ===");
+                                break; // Exit I/O loop
+                            }
                             Some(2) => {
                                 // Image output - Zoom renderer (hint-new-2)
                                 // false = BLACK (0), true = WHITE (255)
@@ -2811,6 +3138,88 @@ fn main() {
                                 // Depth 9-25: zoom into center 1/2, render at 128x128
                                 eprintln!("OUTPUT IMAGE (quadtree, zoom renderer)");
                                 eprintln!("  Arena nodes: {}", arena.nodes.len());
+
+                                // === DIAGNOSTIC: Trace image data node structure ===
+                                if decode_mode == "trace-image" || decode_mode == "examine" {
+                                    let data_f = arena.follow(data);
+                                    let dn = arena.nodes[data_f as usize];
+                                    let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
+                                    eprintln!("\n=== IMAGE DATA NODE TRACE ===");
+                                    eprintln!("  data idx={} tag={} a={} b={}",
+                                        data_f, tag_names[dn.tag as usize], dn.a, dn.b);
+                                    eprintln!("  describe(3): {}", &describe(&arena, data_f, 3));
+
+                                    // Apply sel_0..4 and measure fuel/step count
+                                    let trace_sels: [u32; 5] = [
+                                        build_diamond_sel(&mut arena, 0),
+                                        build_diamond_sel(&mut arena, 1),
+                                        build_diamond_sel(&mut arena, 2),
+                                        build_diamond_sel(&mut arena, 3),
+                                        build_diamond_sel(&mut arena, 4),
+                                    ];
+                                    let sel_names = ["COND", "NW", "NE", "SW", "SE"];
+                                    let mut children = [0u32; 5];
+                                    for i in 0..5 {
+                                        let arena_before = arena.nodes.len();
+                                        let app = arena.alloc(APP, data_f, trace_sels[i]);
+                                        let mut f = 500_000_000u64;
+                                        let f_before = f;
+                                        arena.whnf(app, &mut f);
+                                        let result = arena.follow(app);
+                                        children[i] = result;
+                                        let steps = f_before - f;
+                                        let new_nodes = arena.nodes.len() - arena_before;
+                                        let rn = arena.nodes[result as usize];
+                                        eprintln!("  sel_{} ({}): {} steps, {} new nodes, result tag={} idx={}",
+                                            i, sel_names[i], steps, new_nodes,
+                                            tag_names[rn.tag as usize], result);
+                                        eprintln!("    describe(3): {}", &describe(&arena, result, 3));
+                                        if i == 0 {
+                                            // Decode COND as bool
+                                            let b = decode_bool(&mut arena, result, 5_000_000);
+                                            eprintln!("    COND as bool: {:?}", b);
+                                        }
+                                    }
+
+                                    // For each child, apply sel_0 to get their COND
+                                    eprintln!("\n  --- Level 2: COND of each child ---");
+                                    for i in 1..5 {
+                                        let app = arena.alloc(APP, children[i], trace_sels[0]);
+                                        let mut f = 500_000_000u64;
+                                        let f_before = f;
+                                        arena.whnf(app, &mut f);
+                                        let result = arena.follow(app);
+                                        let steps = f_before - f;
+                                        let b = decode_bool(&mut arena, result, 5_000_000);
+                                        eprintln!("  {}.COND: {:?} ({} steps)", sel_names[i], b, steps);
+
+                                        // Also get children of this child
+                                        for j in 1..5 {
+                                            let app2 = arena.alloc(APP, children[i], trace_sels[j]);
+                                            let mut f2 = 500_000_000u64;
+                                            arena.whnf(app2, &mut f2);
+                                            let child2 = arena.follow(app2);
+                                            // Get COND of grandchild
+                                            let app3 = arena.alloc(APP, child2, trace_sels[0]);
+                                            let mut f3 = 500_000_000u64;
+                                            arena.whnf(app3, &mut f3);
+                                            let gc_result = arena.follow(app3);
+                                            let gb = decode_bool(&mut arena, gc_result, 5_000_000);
+                                            eprintln!("    {}.{}.COND: {:?}", sel_names[i], sel_names[j], gb);
+                                        }
+                                    }
+
+                                    eprintln!("  Arena after trace: {}", arena.nodes.len());
+                                    eprintln!("=== END IMAGE DATA NODE TRACE ===\n");
+
+                                    if decode_mode == "trace-image" {
+                                        break; // Stop after trace
+                                    }
+                                    // For examine, also do GC to reclaim trace garbage
+                                    let mut gc_roots = vec![data];
+                                    let (total, live, freed) = arena.gc(&gc_roots);
+                                    eprintln!("  Post-trace GC: total={} live={} freed={}", total, live, freed);
+                                }
                                 // Pre-build selectors once
                                 let sels: [u32; 5] = [
                                     build_diamond_sel(&mut arena, 0),
@@ -3490,6 +3899,88 @@ fn main() {
                 eprintln!("\n=== KEYFIND RESULT ===");
                 eprintln!("Found key codes: {:?}", found_key);
             }
+        }
+        "test-item09" => {
+            // Load item_09 directly and test if it's a Church 5-tuple
+            let item09_path = "extracted/data_items/item_09.txt";
+            eprintln!("Loading {}...", item09_path);
+            let item09_data = fs::read(item09_path).expect("Failed to read item_09.txt");
+            eprintln!("  {} bytes", item09_data.len());
+
+            let item09_root = parse_compact(&mut arena, &item09_data);
+            eprintln!("  Parsed: root={} arena={}", item09_root, arena.nodes.len());
+            eprintln!("  describe(3): {}", &describe(&arena, item09_root, 3));
+
+            // Try applying diamond selectors
+            let sels: [u32; 5] = [
+                build_diamond_sel(&mut arena, 0),
+                build_diamond_sel(&mut arena, 1),
+                build_diamond_sel(&mut arena, 2),
+                build_diamond_sel(&mut arena, 3),
+                build_diamond_sel(&mut arena, 4),
+            ];
+            let sel_names = ["COND", "NW", "NE", "SW", "SE"];
+
+            for i in 0..5 {
+                let arena_before = arena.nodes.len();
+                let app = arena.alloc(APP, item09_root, sels[i]);
+                let mut f = 500_000_000u64;
+                let f_before = f;
+                arena.whnf(app, &mut f);
+                let result = arena.follow(app);
+                let steps = f_before - f;
+                let new_nodes = arena.nodes.len() - arena_before;
+                let rn = arena.nodes[result as usize];
+                let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
+                eprintln!("  sel_{} ({}): {} steps, {} new nodes, result tag={}",
+                    i, sel_names[i], steps, new_nodes, tag_names[rn.tag as usize]);
+                eprintln!("    describe(3): {}", &describe(&arena, result, 3));
+                if i == 0 {
+                    let b = decode_bool(&mut arena, result, 5_000_000);
+                    eprintln!("    COND as bool: {:?}", b);
+                }
+            }
+
+            // Also try pair1_fst/pair1_snd to see if it's a pair structure
+            eprintln!("\n  Trying pair1_fst/pair1_snd...");
+            let mut f1 = 500_000_000u64;
+            let fst = pair1_fst(&mut arena, item09_root, &mut f1);
+            let fst_follow = arena.follow(fst);
+            eprintln!("  pair1_fst: tag={} describe(3): {}",
+                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[fst_follow as usize].tag as usize],
+                &describe(&arena, fst_follow, 3));
+            let fst_bool = decode_bool(&mut arena, fst_follow, 5_000_000);
+            eprintln!("    as bool: {:?}", fst_bool);
+
+            let mut f2 = 500_000_000u64;
+            let snd = pair1_snd(&mut arena, item09_root, &mut f2);
+            let snd_follow = arena.follow(snd);
+            eprintln!("  pair1_snd: tag={} describe(2): {}",
+                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[snd_follow as usize].tag as usize],
+                &describe(&arena, snd_follow, 2));
+
+            // Try pair2 extraction
+            eprintln!("\n  Trying pair2 (pair_fst/pair_snd)...");
+            let mut f3 = 500_000_000u64;
+            let p2_fst = pair_fst(&mut arena, item09_root, &mut f3);
+            let p2_fst_follow = arena.follow(p2_fst);
+            eprintln!("  pair_fst: tag={} describe(2): {}",
+                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[p2_fst_follow as usize].tag as usize],
+                &describe(&arena, p2_fst_follow, 2));
+            let p2_fst_bool = decode_bool(&mut arena, p2_fst_follow, 5_000_000);
+            eprintln!("    as bool: {:?}", p2_fst_bool);
+
+            let mut f4 = 500_000_000u64;
+            let p2_snd = pair_snd(&mut arena, item09_root, &mut f4);
+            let p2_snd_follow = arena.follow(p2_snd);
+            eprintln!("  pair_snd: tag={} describe(2): {}",
+                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[p2_snd_follow as usize].tag as usize],
+                &describe(&arena, p2_snd_follow, 2));
+            let p2_snd_bool = decode_bool(&mut arena, p2_snd_follow, 5_000_000);
+            eprintln!("    as bool: {:?}", p2_snd_bool);
+
+            // Try decode_bool directly on item09_root
+            eprintln!("\n  decode_bool(item09_root): {:?}", decode_bool(&mut arena, item09_root, 5_000_000));
         }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);

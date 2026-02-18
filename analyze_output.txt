@@ -223,209 +223,226 @@ Step 4: p1=Some(1), p2=Some(2)
   tag node: (S (S I (K (S (S (K S) (S (K K) I)) (K I)))) (K (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I)))))
   p1 node: (S (S (K S) (S (K K) I)) (K I))
   p2 node: (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I)))
-OUTPUT IMAGE (quadtree, zoom renderer)
-  Arena nodes: 31039442
-  Root children extracted. Arena: 31842011
-  Running initial GC...
-  GC: total=31842011, live=30522839, freed=1319172, free_list=1319172
-  Phase 1: SKIPPED (depths 1-8 are all-black)
-  Phase 2: Center zoom depths 9-25 (snapshot/restore)...
-    Zoom step 1: arena=35423475 free=0
-    Zoom step 2: arena=42461287 free=0
-    Zoom step 3: arena=52024805 free=0
-    Zoom step 4: arena=64488123 free=0
-    Zoom step 5: arena=80235073 free=0
-    Zoom step 6: arena=99643007 free=0
-    Zoom step 7: arena=123089685 free=0
-  Clearing caches and running aggressive GC (zoom-only roots)...
-  Aggressive GC: total=123089685, live=31699026, freed=91390659, free=91390659
-    Zoom to depth 9: arena=123089685 free=63527477
-    Post-zoom GC: total=123089685, live=31961928, freed=91127757, free=91127757
-    Snapshot taken: 123089685 nodes (1477.1 MB)
-      GC: total=597570549, live=139626332, freed=457944217, free=457944217
-      GC: total=797470635, live=265996482, freed=531474153, free=531474153
-      GC: total=979184725, live=403842182, freed=575342543, free=575342543
-      GC: total=979184725, live=456370299, freed=522814426, free=522814426
-      GC: total=979184725, live=532486147, freed=446698578, free=446698578
-      Row 8/8: B=62 W=2 G=0 arena=979184725 free=171614254
-      GC: total=979184725, live=585015300, freed=394169425, free=394169425
-      GC: total=593814168, live=139229441, freed=454584727, free=454584727
-      GC: total=797666277, live=265930975, freed=531735302, free=531735302
-      GC: total=981003980, live=404548950, freed=576455030, free=576455030
-      GC: total=981003980, live=456898058, freed=524105922, free=524105922
-      GC: total=981003980, live=534201983, freed=446801997, free=446801997
-      Row 8/8: B=64 W=0 G=0 arena=981003980 free=169501225
-      GC: total=981003980, live=587350483, freed=393653497, free=393653497
-      GC: total=598965663, live=139724259, freed=459241404, free=459241404
-      GC: total=798757666, live=266097121, freed=532660545, free=532660545
-      GC: total=980477663, live=403946391, freed=576531272, free=576531272
-      GC: total=980477663, live=456474912, freed=524002751, free=524002751
-      GC: total=980477663, live=532593040, freed=447884623, free=447884623
-      Row 8/8: B=56 W=8 G=0 arena=980477663 free=172321259
-      GC: total=980477663, live=585122597, freed=395355066, free=395355066
-      GC: total=595252203, live=139327351, freed=455924852, free=455924852
-      GC: total=799006145, live=266031601, freed=532974544, free=532974544
-      GC: total=982349762, live=404653148, freed=577696614, free=577696614
-      GC: total=982349762, live=457002660, freed=525347102, free=525347102
-      GC: total=982349762, live=534308882, freed=448040880, free=448040880
-      Row 8/8: B=62 W=2 G=0 arena=982349762 free=170241526
-      GC: total=982349762, live=587457780, freed=394891982, free=394891982
-      GC: total=599004396, live=139715033, freed=459289363, free=459289363
-      GC: total=798783057, live=266087899, freed=532695158, free=532695158
-      GC: total=980503067, live=403937171, freed=576565896, free=576565896
-      GC: total=980503067, live=456465692, freed=524037375, free=524037375
-      GC: total=980503067, live=532583822, freed=447919245, free=447919245
-      Row 8/8: B=60 W=4 G=0 arena=980503067 free=172339801
-      GC: total=980503067, live=585113383, freed=395389684, free=395389684
-      GC: total=595272306, live=139318083, freed=455954223, free=455954223
-      GC: total=799004416, live=266022329, freed=532982087, free=532982087
-      GC: total=982348011, live=404643857, freed=577704154, free=577704154
-      GC: total=982348011, live=456993367, freed=525354644, free=525354644
-      GC: total=982348011, live=534299574, freed=448048437, free=448048437
-      Row 8/8: B=36 W=28 G=0 arena=982348011 free=170244652
-      GC: total=982348011, live=587448450, freed=394899561, free=394899561
-      GC: total=600446052, live=139812955, freed=460633097, free=460633097
-      GC: total=800119781, live=266188521, freed=533931260, free=533931260
-      GC: total=800119781, live=317672806, freed=482446975, free=482446975
-      GC: total=800119781, live=404041335, freed=396078446, free=396078446
-      GC: total=800119781, live=456570266, freed=343549515, free=343549515
-      GC: total=854848864, live=532690720, freed=322158144, free=322158144
-      Row 8/8: B=3 W=61 G=0 arena=854848864 free=46084867
-      GC: total=854848864, live=585220653, freed=269628211, free=269628211
-      GC: total=596764353, live=139416109, freed=457348244, free=457348244
-      GC: total=800416631, live=266123077, freed=534293554, free=534293554
-      GC: total=800416631, live=318212754, freed=482203877, free=482203877
-      GC: total=800416631, live=404748139, freed=395668492, free=395668492
-      GC: total=800416631, live=457098033, freed=343318598, free=343318598
-      GC: total=861722018, live=534406627, freed=327315391, free=327315391
-      Row 8/8: B=6 W=58 G=0 arena=861722018 free=48983870
-      GC: total=861722018, live=587555887, freed=274166131, free=274166131
-      GC: total=594206715, live=139359105, freed=454847610, free=454847610
-      GC: total=797723344, live=266027914, freed=531695430, free=531695430
-      GC: total=981104381, live=404645670, freed=576458711, free=576458711
-      GC: total=981104381, live=456995182, freed=524109199, free=524109199
-      GC: total=981104381, live=534298939, freed=446805442, free=446805442
-      Row 8/8: B=64 W=0 G=0 arena=981104381 free=169482419
-      GC: total=981104381, live=587447843, freed=393656538, free=393656538
-      GC: total=600761439, live=139978535, freed=460782904, free=460782904
-      GC: total=800150994, live=266313749, freed=533837245, free=533837245
-      GC: total=800150994, live=317798468, freed=482352526, free=482352526
-      GC: total=800150994, live=404166310, freed=395984684, free=395984684
-      GC: total=800150994, live=456695639, freed=343455355, free=343455355
-      GC: total=854961169, live=532815849, freed=322145320, free=322145320
-      Row 8/8: B=64 W=0 G=0 arena=854961169 free=46069103
-      GC: total=854961169, live=585346214, freed=269614955, free=269614955
-      GC: total=595601829, live=139457032, freed=456144797, free=456144797
-      GC: total=799010228, live=266128537, freed=532881691, free=532881691
-      GC: total=982396580, live=404749793, freed=577646787, free=577646787
-      GC: total=982396580, live=457099709, freed=525296871, free=525296871
-      GC: total=982396580, live=534405716, freed=447990864, free=447990864
-      Row 8/8: B=60 W=4 G=0 arena=982396580 free=170188801
-      GC: total=982396580, live=587555024, freed=394841556, free=394841556
-      GC: total=602199492, live=140076443, freed=462123049, free=462123049
-      GC: total=801490779, live=266414350, freed=535076429, free=535076429
-      GC: total=801490779, live=317899461, freed=483591318, free=483591318
-      GC: total=801490779, live=404270430, freed=397220349, free=397220349
-      GC: total=801490779, live=456800167, freed=344690612, free=344690612
-      GC: total=855808506, live=532922662, freed=322885844, free=322885844
-      Row 8/8: B=28 W=36 G=0 arena=855808506 free=46311066
-      GC: total=855808506, live=585453411, freed=270355095, free=270355095
-      GC: total=595640544, live=139447774, freed=456192770, free=456192770
-      GC: total=799035593, live=266119267, freed=532916326, free=532916326
-      GC: total=982421879, live=404740468, freed=577681411, free=577681411
-      GC: total=982421879, live=457090356, freed=525331523, free=525331523
-      GC: total=982421879, live=534396358, freed=448025521, free=448025521
-      Row 8/8: B=11 W=53 G=0 arena=982421879 free=170207426
-      GC: total=982421879, live=587545638, freed=394876241, free=394876241
-      GC: total=602219661, live=140067221, freed=462152440, free=462152440
-      GC: total=801489114, live=266405126, freed=535083988, free=535083988
-      GC: total=801489114, live=317890213, freed=483598901, free=483598901
-      GC: total=801489114, live=404261182, freed=397227932, free=397227932
-      GC: total=801489114, live=456790921, freed=344698193, free=344698193
-      GC: total=855802323, live=532913404, freed=322888919, free=322888919
-      Row 8/8: B=2 W=62 G=0 arena=855802323 free=46309674
-      GC: total=855802323, live=585444151, freed=270358172, free=270358172
-      GC: total=597082128, live=139545668, freed=457536460, free=457536460
-      GC: total=800372283, live=266219887, freed=534152396, free=534152396
-      GC: total=800372283, live=318309968, freed=482062315, free=482062315
-      GC: total=800372283, live=404844665, freed=395527618, free=395527618
-      GC: total=800372283, live=457194957, freed=343177326, free=343177326
-      GC: total=861777842, live=534503272, freed=327274570, free=327274570
-      Row 8/8: B=5 W=59 G=0 arena=861777842 free=48962609
-      GC: total=861777842, live=587652950, freed=274124892, free=274124892
-      GC: total=603711708, live=140165245, freed=463546463, free=463546463
-      GC: total=802901555, live=266505925, freed=536395630, free=536395630
-      GC: total=802901555, live=317991404, freed=484910151, free=484910151
-      GC: total=802901555, live=404365649, freed=398535906, free=398535906
-      GC: total=802901555, live=456895780, freed=346005775, free=346005775
-      GC: total=856694658, live=533020691, freed=323673967, free=323673967
-      Row 8/8: B=1 W=63 G=0 arena=856694658 free=46566974
-      GC: total=856694658, live=585551830, freed=271142828, free=271142828
-    Tile 16/256: arena_peak=856694658 B=15944 W=440 G=0
-      GC: total=599309835, live=139836592, freed=459473243, free=459473243
-      GC: total=798810911, live=266184672, freed=532626239, free=532626239
-      GC: total=980568196, live=404033656, freed=576534540, free=576534540
-      GC: total=980568196, live=456562581, freed=524005615, free=524005615
-      GC: total=980568196, live=532680543, freed=447887653, free=447887653
-      Row 8/8: B=64 W=0 G=0 arena=980568196 free=172301897
-      GC: total=980568196, live=585210504, freed=395357692, free=395357692
-      GC: total=595553457, live=139439695, freed=456113762, free=456113762
-      GC: total=799006205, live=266119058, freed=532887147, free=532887147
-      GC: total=982386792, live=404740322, freed=577646470, free=577646470
-      GC: total=982386792, live=457090238, freed=525296554, free=525296554
-      GC: total=982386792, live=534396245, freed=447990547, free=447990547
-      Row 8/8: B=64 W=0 G=0 arena=982386792 free=170188343
-      GC: total=982386792, live=587545553, freed=394841239, free=394841239
-      GC: total=569891649, live=133875665, freed=436015984, free=436015984
-      GC: total=754422204, live=251935421, freed=502486783, free=502486783
-      GC: total=915672525, live=379484132, freed=536188393, free=536188393
-      GC: total=915672525, live=427344323, freed=488328202, free=488328202
-      GC: total=915672525, live=497487406, freed=418185119, free=418185119
-      Row 8/8: B=35 W=29 G=0 arena=915672525 free=161706231
-      GC: total=915672525, live=545911329, freed=369761196, free=369761196
-      GC: total=571322943, live=133981659, freed=437341284, free=437341284
-      GC: total=755786710, live=252044096, freed=503742614, free=503742614
-      GC: total=917042358, live=379596304, freed=537446054, free=537446054
-      GC: total=917042358, live=427456875, freed=489585483, free=489585483
-      GC: total=917042358, live=497602219, freed=419440139, free=419440139
-      Row 8/8: B=11 W=53 G=0 arena=917042358 free=162456933
-      GC: total=917042358, live=546026526, freed=371015832, free=371015832
-      GC: total=600743751, live=139925305, freed=460818446, free=460818446
-      GC: total=800123135, live=266276033, freed=533847102, free=533847102
-      GC: total=800123135, live=317760748, freed=482362387, free=482362387
-      GC: total=800123135, live=404128523, freed=395994612, free=395994612
-      GC: total=800123135, live=456657856, freed=343465279, free=343465279
-      GC: total=854920035, live=532778072, freed=322141963, free=322141963
-      Row 8/8: B=25 W=39 G=0 arena=854920035 free=46061111
-      GC: total=854920035, live=585308425, freed=269611610, free=269611610
-      GC: total=597011598, live=139528335, freed=457483263, free=457483263
-      GC: total=800344321, live=266210409, freed=534133912, free=534133912
-      GC: total=800344321, live=318300490, freed=482043831, free=482043831
-      GC: total=800344321, live=404835157, freed=395509164, free=395509164
-      GC: total=800344321, live=457185463, freed=343158858, free=343158858
-      GC: total=861750741, live=534493728, freed=327257013, free=327257013
-      Row 8/8: B=10 W=54 G=0 arena=861750741 free=48951772
-      GC: total=861750741, live=587643428, freed=274107313, free=274107313
-      GC: total=571371972, live=133964321, freed=437407651, free=437407651
-      GC: total=755784264, live=252026783, freed=503757481, free=503757481
-      GC: total=917040252, live=379579053, freed=537461199, free=537461199
-      GC: total=917040252, live=427439626, freed=489600626, free=489600626
-      GC: total=917040252, live=497585008, freed=419455244, free=419455244
-      Row 8/8: B=17 W=47 G=0 arena=917040252 free=162466476
-      GC: total=917040252, live=546009313, freed=371030939, free=371030939
-      GC: total=572835093, live=134070437, freed=438764656, free=438764656
-      GC: total=757197387, live=252135635, freed=505061752, free=505061752
-      GC: total=918459789, live=379691485, freed=538768304, free=538768304
-      GC: total=918459789, live=427552454, freed=490907335, free=490907335
-      GC: total=918459789, live=497700212, freed=420759577, free=420759577
-      Row 8/8: B=19 W=45 G=0 arena=918459789 free=163244144
-      GC: total=918459789, live=546124917, freed=372334872, free=372334872
-      GC: total=595952088, live=139543328, freed=456408760, free=456408760
-      GC: total=799134039, live=266216014, freed=532918025, free=532918025
-      GC: total=982539911, live=404837140, freed=577702771, free=577702771
-      GC: total=982539911, live=457187460, freed=525352451, free=525352451
-      GC: total=982539911, live=534493329, freed=448046582, free=448046582
-      Row 8/8: B=64 W=0 G=0 arena=982539911 free=170206167
-      GC: total=982539911, live=587643041, freed=394896870, free=394896870
-      GC: total=602530089, live=140176564, freed=462353525, free=462353525
-      GC: total=801551144, live=266501822, freed=535049322, free=535049322
+=== IMAGE DATA ANALYSIS ===
+  Image data node index: 31039392
+  Arena nodes at this point: 31039442
+  data node: idx=31039392, tag=APP
+
+=== DIAMOND PATTERN MATCH (no evaluation) ===
+  FAILED: Root does not match diamond pattern
+
+  === DETAILED NODE TRACE ===
+  APP (idx=31039392 real=31039392)
+    .a=APP (idx=31039390 real=31039431)
+    .a=  .a=S (idx=31039429 real=30440791 a=4294967295 b=4294967295)
+    .a=  .b=APP (idx=31039430 real=31039430)
+    .a=  .b=  .a=APP (idx=31039427 real=31039427)
+    .a=  .b=  .a=  .a=APP (idx=31039424 real=31039424)
+    .a=  .b=  .a=  .a=  .a=APP (idx=31039421 real=31039421)
+    .a=  .b=  .a=  .a=  .a=  .a=APP (idx=31039418 real=31039418)
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=APP (idx=31039415 real=31039415)
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .a=APP (idx=31039412 real=31039412)
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .a=  .a=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .a=  .b=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .b=APP (idx=31038566 real=31038566)
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .b=  .a=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .a=  .b=  .b=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .b=APP (idx=31038548 real=31038548)
+    .a=  .b=  .a=  .a=  .a=  .a=  .b=  .a=APP (idx=31038533 real=31038533)
+    .a=  .b=  .a=  .a=  .a=  .a=  .b=  .a=  .a=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .b=  .a=  .b=...
+    .a=  .b=  .a=  .a=  .a=  .a=  .b=  .b=S2 (idx=31038506 real=31038669 a=31038674 b=31038668)
+    .a=  .b=  .a=  .a=  .a=  .b=APP (idx=31038710 real=31038710)
+    .a=  .b=  .a=  .a=  .a=  .b=  .a=APP (idx=7661003 real=7661003)
+    .a=  .b=  .a=  .a=  .a=  .b=  .a=  .a=K (idx=151969 real=151969 a=4294967295 b=4294967295)
+    .a=  .b=  .a=  .a=  .a=  .b=  .a=  .b=APP (idx=7661002 real=7661002)
+    .a=  .b=  .a=  .a=  .a=  .b=  .a=  .b=  .a=...
+    .a=  .b=  .a=  .a=  .a=  .b=  .a=  .b=  .b=...
+    .a=  .b=  .a=  .a=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .a=  .b=  .a=  .a=  .b=APP (idx=31038707 real=31038707)
+    .a=  .b=  .a=  .a=  .b=  .a=APP (idx=15165120 real=15165120)
+    .a=  .b=  .a=  .a=  .b=  .a=  .a=K (idx=7661006 real=7661006 a=4294967295 b=4294967295)
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=APP (idx=15165119 real=15165119)
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .a=APP (idx=15029211 real=15029211)
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .a=  .a=...
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .a=  .b=...
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .b=APP (idx=15165118 real=15165118)
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .b=  .a=...
+    .a=  .b=  .a=  .a=  .b=  .a=  .b=  .b=  .b=...
+    .a=  .b=  .a=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .a=  .b=  .a=  .b=APP (idx=31038704 real=31038704)
+    .a=  .b=  .a=  .b=  .a=APP (idx=22671561 real=22671561)
+    .a=  .b=  .a=  .b=  .a=  .a=K (idx=15165123 real=15165123 a=4294967295 b=4294967295)
+    .a=  .b=  .a=  .b=  .a=  .b=APP (idx=22671560 real=22671560)
+    .a=  .b=  .a=  .b=  .a=  .b=  .a=APP (idx=22535648 real=22535648)
+    .a=  .b=  .a=  .b=  .a=  .b=  .a=  .a=S (idx=15165124 real=15165124 a=4294967295 b=4294967295)
+    .a=  .b=  .a=  .b=  .a=  .b=  .a=  .b=APP (idx=22535647 real=22535647)
+    .a=  .b=  .a=  .b=  .a=  .b=  .a=  .b=  .a=...
+    .a=  .b=  .a=  .b=  .a=  .b=  .a=  .b=  .b=...
+    .a=  .b=  .a=  .b=  .a=  .b=  .b=APP (idx=22671559 real=22671559)
+    .a=  .b=  .a=  .b=  .a=  .b=  .b=  .a=K (idx=22535649 real=22535649 a=4294967295 b=4294967295)
+    .a=  .b=  .a=  .b=  .a=  .b=  .b=  .b=APP (idx=22671558 real=22671558)
+    .a=  .b=  .a=  .b=  .a=  .b=  .b=  .b=  .a=...
+    .a=  .b=  .a=  .b=  .a=  .b=  .b=  .b=  .b=...
+    .a=  .b=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .a=  .b=  .b=APP (idx=31038965 real=31038965)
+    .a=  .b=  .b=  .a=APP (idx=31038962 real=31038962)
+    .a=  .b=  .b=  .a=  .a=APP (idx=31038959 real=31038959)
+    .a=  .b=  .b=  .a=  .a=  .a=APP (idx=31038956 real=31038956)
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=APP (idx=30440204 real=30440204)
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .a=APP (idx=30440154 real=30440154)
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .a=  .a=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .a=  .b=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .b=APP (idx=30440203 real=30440203)
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .b=  .a=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .a=  .b=  .b=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .b=APP (idx=30485228 real=30485228)
+    .a=  .b=  .b=  .a=  .a=  .a=  .b=  .a=APP (idx=30949 real=30949)
+    .a=  .b=  .b=  .a=  .a=  .a=  .b=  .a=  .a=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .b=  .a=  .b=...
+    .a=  .b=  .b=  .a=  .a=  .a=  .b=  .b=S2 (idx=30485219 real=30485219 a=30178092 b=30485218)
+    .a=  .b=  .b=  .a=  .a=  .b=APP (idx=31038338 real=31038338)
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=APP (idx=31038335 real=31038335)
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .a=APP (idx=151843 real=151843)
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .a=  .a=...
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .a=  .b=...
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .b=APP (idx=31037972 real=31037972)
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .b=  .a=...
+    .a=  .b=  .b=  .a=  .a=  .b=  .a=  .b=  .b=...
+    .a=  .b=  .b=  .a=  .a=  .b=  .b=S2 (idx=31037951 real=31038402 a=31038419 b=31038401)
+    .a=  .b=  .b=  .a=  .b=APP (idx=31038713 real=31038713)
+    .a=  .b=  .b=  .a=  .b=  .a=APP (idx=151966 real=151966)
+    .a=  .b=  .b=  .a=  .b=  .a=  .a=K (idx=151958 real=151958 a=4294967295 b=4294967295)
+    .a=  .b=  .b=  .a=  .b=  .a=  .b=APP (idx=151965 real=151965)
+    .a=  .b=  .b=  .a=  .b=  .a=  .b=  .a=APP (idx=151963 real=151963)
+    .a=  .b=  .b=  .a=  .b=  .a=  .b=  .a=  .a=...
+    .a=  .b=  .b=  .a=  .b=  .a=  .b=  .a=  .b=...
+    .a=  .b=  .b=  .a=  .b=  .a=  .b=  .b=I (idx=151964 real=151964 a=4294967295 b=4294967295)
+    .a=  .b=  .b=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .a=  .b=  .b=  .b=S2 (idx=31038944 real=31039317 a=31039388 b=31039316)
+    .b=APP (idx=31039391 real=31039391)
+    .b=  .a=APP (idx=31039316 real=31039316)
+    .b=  .a=  .a=APP (idx=31039277 real=31039277)
+    .b=  .a=  .a=  .a=APP (idx=31039241 real=31039241)
+    .b=  .a=  .a=  .a=  .a=APP (idx=31039208 real=31039208)
+    .b=  .a=  .a=  .a=  .a=  .a=APP (idx=31039178 real=31039178)
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=APP (idx=31039151 real=31039151)
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .a=APP (idx=31039127 real=31039127)
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .a=  .a=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .a=  .b=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .b=APP (idx=31038566 real=31038566)
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .b=  .a=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .a=  .b=  .b=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .b=APP (idx=31038548 real=31038548)
+    .b=  .a=  .a=  .a=  .a=  .a=  .b=  .a=APP (idx=31038533 real=31038533)
+    .b=  .a=  .a=  .a=  .a=  .a=  .b=  .a=  .a=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .b=  .a=  .b=...
+    .b=  .a=  .a=  .a=  .a=  .a=  .b=  .b=S2 (idx=31038506 real=31038669 a=31038674 b=31038668)
+    .b=  .a=  .a=  .a=  .a=  .b=APP (idx=31038710 real=31038710)
+    .b=  .a=  .a=  .a=  .a=  .b=  .a=APP (idx=7661003 real=7661003)
+    .b=  .a=  .a=  .a=  .a=  .b=  .a=  .a=K (idx=151969 real=151969 a=4294967295 b=4294967295)
+    .b=  .a=  .a=  .a=  .a=  .b=  .a=  .b=APP (idx=7661002 real=7661002)
+    .b=  .a=  .a=  .a=  .a=  .b=  .a=  .b=  .a=...
+    .b=  .a=  .a=  .a=  .a=  .b=  .a=  .b=  .b=...
+    .b=  .a=  .a=  .a=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .b=  .a=  .a=  .a=  .b=APP (idx=31038707 real=31038707)
+    .b=  .a=  .a=  .a=  .b=  .a=APP (idx=15165120 real=15165120)
+    .b=  .a=  .a=  .a=  .b=  .a=  .a=K (idx=7661006 real=7661006 a=4294967295 b=4294967295)
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=APP (idx=15165119 real=15165119)
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .a=APP (idx=15029211 real=15029211)
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .a=  .a=...
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .a=  .b=...
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .b=APP (idx=15165118 real=15165118)
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .b=  .a=...
+    .b=  .a=  .a=  .a=  .b=  .a=  .b=  .b=  .b=...
+    .b=  .a=  .a=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .b=  .a=  .a=  .b=APP (idx=31038704 real=31038704)
+    .b=  .a=  .a=  .b=  .a=APP (idx=22671561 real=22671561)
+    .b=  .a=  .a=  .b=  .a=  .a=K (idx=15165123 real=15165123 a=4294967295 b=4294967295)
+    .b=  .a=  .a=  .b=  .a=  .b=APP (idx=22671560 real=22671560)
+    .b=  .a=  .a=  .b=  .a=  .b=  .a=APP (idx=22535648 real=22535648)
+    .b=  .a=  .a=  .b=  .a=  .b=  .a=  .a=S (idx=15165124 real=15165124 a=4294967295 b=4294967295)
+    .b=  .a=  .a=  .b=  .a=  .b=  .a=  .b=APP (idx=22535647 real=22535647)
+    .b=  .a=  .a=  .b=  .a=  .b=  .a=  .b=  .a=...
+    .b=  .a=  .a=  .b=  .a=  .b=  .a=  .b=  .b=...
+    .b=  .a=  .a=  .b=  .a=  .b=  .b=APP (idx=22671559 real=22671559)
+    .b=  .a=  .a=  .b=  .a=  .b=  .b=  .a=K (idx=22535649 real=22535649 a=4294967295 b=4294967295)
+    .b=  .a=  .a=  .b=  .a=  .b=  .b=  .b=APP (idx=22671558 real=22671558)
+    .b=  .a=  .a=  .b=  .a=  .b=  .b=  .b=  .a=...
+    .b=  .a=  .a=  .b=  .a=  .b=  .b=  .b=  .b=...
+    .b=  .a=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .b=  .a=  .b=APP (idx=31038701 real=31038701)
+    .b=  .a=  .b=  .a=APP (idx=30178078 real=30178078)
+    .b=  .a=  .b=  .a=  .a=K (idx=22671564 real=22671564 a=4294967295 b=4294967295)
+    .b=  .a=  .b=  .a=  .b=APP (idx=30178077 real=30178077)
+    .b=  .a=  .b=  .a=  .b=  .a=APP (idx=30042165 real=30042165)
+    .b=  .a=  .b=  .a=  .b=  .a=  .a=S (idx=22671565 real=22671565 a=4294967295 b=4294967295)
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=APP (idx=30042164 real=30042164)
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .a=APP (idx=29905840 real=29905840)
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .a=  .a=...
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .a=  .b=...
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .b=APP (idx=30042163 real=30042163)
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .b=  .a=...
+    .b=  .a=  .b=  .a=  .b=  .a=  .b=  .b=  .b=...
+    .b=  .a=  .b=  .a=  .b=  .b=APP (idx=30178076 real=30178076)
+    .b=  .a=  .b=  .a=  .b=  .b=  .a=K (idx=30042166 real=30042166 a=4294967295 b=4294967295)
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=APP (idx=30178075 real=30178075)
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .a=APP (idx=30144223 real=30144223)
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .a=  .a=...
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .a=  .b=...
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .b=APP (idx=30178074 real=30178074)
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .b=  .a=...
+    .b=  .a=  .b=  .a=  .b=  .b=  .b=  .b=  .b=...
+    .b=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .b=  .b=APP (idx=31038965 real=31038965)
+    .b=  .b=  .a=APP (idx=31038962 real=31038962)
+    .b=  .b=  .a=  .a=APP (idx=31038959 real=31038959)
+    .b=  .b=  .a=  .a=  .a=APP (idx=31038956 real=31038956)
+    .b=  .b=  .a=  .a=  .a=  .a=APP (idx=30440204 real=30440204)
+    .b=  .b=  .a=  .a=  .a=  .a=  .a=APP (idx=30440154 real=30440154)
+    .b=  .b=  .a=  .a=  .a=  .a=  .a=  .a=S (idx=30440142 real=30440142 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .a=  .a=  .a=  .a=  .b=APP (idx=30440153 real=30440153)
+    .b=  .b=  .a=  .a=  .a=  .a=  .a=  .b=  .a=...
+    .b=  .b=  .a=  .a=  .a=  .a=  .a=  .b=  .b=...
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=APP (idx=30440203 real=30440203)
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .a=APP (idx=30440193 real=30440193)
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .a=  .a=...
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .a=  .b=...
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .b=APP (idx=30440202 real=30440202)
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .b=  .a=...
+    .b=  .b=  .a=  .a=  .a=  .a=  .b=  .b=  .b=...
+    .b=  .b=  .a=  .a=  .a=  .b=APP (idx=30485228 real=30485228)
+    .b=  .b=  .a=  .a=  .a=  .b=  .a=APP (idx=30949 real=30949)
+    .b=  .b=  .a=  .a=  .a=  .b=  .a=  .a=K (idx=30891 real=30891 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .a=  .a=  .b=  .a=  .b=APP (idx=30948 real=30948)
+    .b=  .b=  .a=  .a=  .a=  .b=  .a=  .b=  .a=...
+    .b=  .b=  .a=  .a=  .a=  .b=  .a=  .b=  .b=...
+    .b=  .b=  .a=  .a=  .a=  .b=  .b=S2 (idx=30485219 real=30485219 a=30178092 b=30485218)
+    .b=  .b=  .a=  .a=  .b=APP (idx=31038338 real=31038338)
+    .b=  .b=  .a=  .a=  .b=  .a=APP (idx=31038335 real=31038335)
+    .b=  .b=  .a=  .a=  .b=  .a=  .a=APP (idx=151843 real=151843)
+    .b=  .b=  .a=  .a=  .b=  .a=  .a=  .a=APP (idx=151841 real=151841)
+    .b=  .b=  .a=  .a=  .b=  .a=  .a=  .a=  .a=...
+    .b=  .b=  .a=  .a=  .b=  .a=  .a=  .a=  .b=...
+    .b=  .b=  .a=  .a=  .b=  .a=  .a=  .b=I (idx=151842 real=151842 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .a=  .b=  .a=  .b=APP (idx=31037972 real=31037972)
+    .b=  .b=  .a=  .a=  .b=  .a=  .b=  .a=APP (idx=31037969 real=31037969)
+    .b=  .b=  .a=  .a=  .b=  .a=  .b=  .a=  .a=...
+    .b=  .b=  .a=  .a=  .b=  .a=  .b=  .a=  .b=...
+    .b=  .b=  .a=  .a=  .b=  .a=  .b=  .b=S2 (idx=31037966 real=31037976 a=31037978 b=31037975)
+    .b=  .b=  .a=  .a=  .b=  .b=S2 (idx=31037951 real=31038402 a=31038419 b=31038401)
+    .b=  .b=  .a=  .b=APP (idx=31038713 real=31038713)
+    .b=  .b=  .a=  .b=  .a=APP (idx=151966 real=151966)
+    .b=  .b=  .a=  .b=  .a=  .a=K (idx=151958 real=151958 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .b=  .a=  .b=APP (idx=151965 real=151965)
+    .b=  .b=  .a=  .b=  .a=  .b=  .a=APP (idx=151963 real=151963)
+    .b=  .b=  .a=  .b=  .a=  .b=  .a=  .a=S (idx=151959 real=151959 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .b=  .a=  .b=  .a=  .b=APP (idx=151962 real=151962)
+    .b=  .b=  .a=  .b=  .a=  .b=  .a=  .b=  .a=...
+    .b=  .b=  .a=  .b=  .a=  .b=  .a=  .b=  .b=...
+    .b=  .b=  .a=  .b=  .a=  .b=  .b=I (idx=151964 real=151964 a=4294967295 b=4294967295)
+    .b=  .b=  .a=  .b=  .b=S2 (idx=31038695 real=31038855 a=31038866 b=31038854)
+    .b=  .b=  .b=S2 (idx=31038944 real=31039317 a=31039388 b=31039316)
+  describe(10): ...
+
+=== ANALYSIS COMPLETE ===

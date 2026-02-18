@@ -59,7 +59,8 @@
       "Bash(systeminfo:*)",
       "Bash(awk:*)",
       "Bash(git commit:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(./ski_eval_rs/target_analyze/release/ski-eval.exe:*)"
     ]
   }
 }
