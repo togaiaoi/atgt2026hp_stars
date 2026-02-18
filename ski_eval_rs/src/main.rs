@@ -495,6 +495,7 @@ fn main() {
     let mut render_var: u64 = 4;
     let mut grid_size: u64 = 0; // 0 = use render_var as grid size
     let mut img_path = "d:/github/atgt2026hp_stars/images/rendered".to_string();
+    let mut key_codes: Vec<u64> = Vec::new(); // --key 5,0,17,5,3
 
     let mut i = 2;
     while i < args.len() {
@@ -518,6 +519,13 @@ fn main() {
             "--grid" => {
                 i += 1;
                 grid_size = args[i].parse().expect("invalid grid value");
+            }
+            "--key" => {
+                i += 1;
+                key_codes = args[i].split(',')
+                    .map(|s| s.trim().parse::<u64>().expect("invalid key code"))
+                    .collect();
+                eprintln!("Key codes: {:?}", key_codes);
             }
             _ => {
                 eprintln!("Unknown option: {}", args[i]);
@@ -2564,8 +2572,9 @@ fn main() {
                         // pair_fst = prev_list (rest), pair_snd = value (character code)
                         // Character codes are integers encoded as: pair(bit, rest_bits)
                         // pair_fst = bit, pair_snd = rest_bits (same as decode_scott_num)
+                        // Skip string scanning for image output (p2=2) to avoid OOM
                         // Try BOTH conventions for string list scan
-                        for conv in ["B_fst_val", "A_fst_rest"] {
+                        for conv in if p2 == Some(2) { vec![] } else { vec!["B_fst_val", "A_fst_rest"] } {
                             let mut wd = data;
                             let mut total = 0u32;
                             let mut chars_a: Vec<Option<u64>> = Vec::new();
@@ -2671,9 +2680,25 @@ fn main() {
                         eprintln!("INPUT requested (p2={:?})", p2);
                         eprintln!("  Q node: {}", &describe(&arena, q, 0)[..200.min(describe(&arena, q, 0).len())]);
 
-                        // For now, try providing empty string input
-                        // We'll need to figure out the right key
-                        let input_val = make_false(&mut arena); // empty string = nil = KI
+                        let input_val = if !key_codes.is_empty() {
+                            // Build key string from --key codes
+                            // B_fst_val convention: pair_fst = value (char), pair_snd = rest
+                            // make_pair(a, b) -> pair_fst=a, pair_snd=b
+                            // So: make_pair(char_code, rest)
+                            eprintln!("  Using key codes: {:?}", key_codes);
+                            let mut str_node = make_false(&mut arena); // nil
+                            // Push in reverse order so first char is outermost
+                            // (matches how the program stores strings)
+                            for &code in key_codes.iter().rev() {
+                                let ch_num = make_scott_num(&mut arena, code);
+                                str_node = make_pair(&mut arena, ch_num, str_node);
+                            }
+                            eprintln!("  Built key string (B_fst_val reversed, {} chars)", key_codes.len());
+                            str_node
+                        } else {
+                            eprintln!("  No --key provided, using empty string");
+                            make_false(&mut arena) // empty string = nil = KI
+                        };
                         let app = arena.alloc(APP, q, input_val);
                         let mut fi = fuel_per_step;
                         arena.whnf(app, &mut fi);

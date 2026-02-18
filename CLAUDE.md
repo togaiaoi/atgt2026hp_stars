@@ -3,6 +3,9 @@
 ## このファイルについて
 重要な情報を随時更新する。コンテキストが失われた場合に備え、発見事項・進捗・判断根拠をここに記録する。
 
+## 作業方針
+- 方針や実装の相談は、適宜 `codex exec` を利用してcodexと行うこと
+
 ## プロジェクト概要
 - `stars.txt` (~400MB) はSKIコンビネータ計算のプログラム
 - 正しく評価すると: 質問文出力 → 鍵文字列入力 → 正誤判定 → (正解なら)画像出力
@@ -149,43 +152,94 @@ IO命令 = pair1(pair1(p1, p2), Q)
 サーバーは独自の文字セット（上記28文字）でSKI式を表示する。
 `M5PWz` は `wrong` のエンコード表現。
 
+### サーバー記法の構造文字（reference.mdより確定）
+| 記法 | 標準 | 役割 |
+|------|------|------|
+| `c` | `[` | 角括弧開き（式開始） |
+| `(` | `]` | 角括弧閉じ（式終了） |
+| `e` | `(` | 丸括弧開き（グループ化/シンボル） |
+| `8` | `)` | 丸括弧閉じ |
+| `j` | `"` | 文字列引用符 |
+| `[` | `,` | カンマ区切り |
+| `f` | `.` | ドット（名前空間区切り） |
+| `o` | `?` | 疑問符 |
+
+### 主要語彙（reference.mdより確定）
+| 記法 | 英語 | | 記法 | 英語 |
+|------|------|-|------|------|
+| `zMnX` | view | | `kPX` | is |
+| `znQPX` | answer | | `,lz` | for |
+| `QnWPX` | print | | `QnQ` | of |
+| `zlWPX` | encode | | `zlWlQD` | definition |
+| `wnz` | what | | `M5PWz` | wrong |
+| `MPQP` | result | | `zWP5M` | correct |
+| `Qn9zn` | error | | `PX{nQ` | question |
+| `-nQPz` | chapter | | `zMn5` | title |
+| `Xnkl` | about | | `QP&PXMP5` | execute |
+
 ---
 
 ## 文字コード解析
 
-### 確定した文字対応（5文字）
-| 内部コード | 表示文字 | 英語 | 根拠 |
-|-----------|---------|------|------|
-| 9         | W       | n    | wrong の4文字目 |
-| 19        | M       | w    | wrong の1文字目 |
-| 20        | 5       | r    | wrong の2文字目 |
-| 21        | z       | g    | wrong の5文字目 |
-| 22        | P       | o    | wrong の3文字目 |
+### ⚠ 旧情報の訂正
+以前の5文字マッピング（wrong=M5PWzからの推定）は**Convention B逆順のため不正確だった**。
+サーバーへの直接クエリ（`charcode_query.js`）により、完全な対応表を取得済み。
+
+### 完全な文字コード対応表（サーバークエリで確定）
+**取得方法**: `[print [format [output.number [pop (CHAR) [z.1 z.2 z.1] 0] end]]]`
+```
+コード →  表示文字
+  0   →  f        10  →  F        20  →  W
+  1   →  w        11  →  *        21  →  M
+  2   →  <        12  →  y        22  →  P
+  3   →  &        13  →  ,        23  →  k
+  4   →  9        14  →  C        24  →  X
+  5   →  Q        15  →  {
+  6   →  l        16  →  D        負のコード:
+  7   →  u        17  →  n        -1  →  [
+  8   →  -        18  →  0        -2  →  o
+  9   →  5        19  →  z        -3  →  j
+```
 
 ### 質問文（33文字、内部コード列）
 ```
 2, 8, 16, 5, 6, 20, 6, 19, 8, 22, 8, 19, 22, 21, 8, 24, 22, 23, 8, 19, 17, 1, 8, 7, 5, 17, 1, 22, 5, 8, 19, 6, 13
 ```
 
+### 質問文のデコード結果（確定）
+コード→表示文字変換:
+```
+<-DQlWlz-P-zPM-XPk-znw-uQnwPQ-zl,
+```
+データチェーン順序（=正しい読み順）で逆転:
+```
+,lz-QPwnQu-wnz-kPX-MPz-P-zlWlQD-<
+```
+`-`（コード8）を単語区切りとすると:
+```
+,lz | QPwnQu | wnz | kPX | MPz | P | zlWlQD | <
+```
+
+### 質問文の翻訳（確定）
+reference.mdの語彙表およびサーバー応答から:
+| 表示文字 | 英語 | 根拠 |
+|---------|------|------|
+| `,lz` | for | reference.md語彙表 |
+| `QPwnQu` | navigation | ナビゲーターページ識別子 |
+| `wnz` | what | reference.md語彙表 + whatコマンド |
+| `kPX` | is | reference.md語彙表 |
+| `MPz` | current | ナビゲーター応答コンテキスト |
+| `P` | ??? | （不明、冠詞的なもの?） |
+| `zlWlQD` | definition | reference.md語彙表 |
+| `<` | ? | （終端記号/疑問符相当?） |
+
+**質問全文**: 「for navigation, what is [the] current definition ?」
+
 ### エラーメッセージ（5文字） = "wrong"
-```
-19(=w), 20(=r), 22(=o), 9(=n), 21(=g)
-```
+コード: 19(=z), 20(=W), 22(=P), 9(=5), 21(=M)
+表示文字列: `M5PWz`（データチェーン逆順で読むと `zWP5M`、サーバー表示は `M5PWz`）
 
-### 既知の文字で部分復号した質問文
-8=スペースと仮定した場合:
-```
-? | ??_r_w | o | wog | ?o? | w?? | ?_r??o_r | w_?
-```
-（パターン: 1-6-1-3-3-3-6-3 文字の8単語）
-
-### 未確定コード（質問文中に出現するもの）
-1, 2, 5, 6, 7, 8, 13, 16, 17, 23, 24
-
-### 未使用コード
-3, 4, 10, 11, 12, 14, 15, 18
-
-### 整数0-24のコンパクトSKI表現（外部情報・別の記法）
+### 整数0-24のコンパクトSKI表現（サーバー記法）
 ```
 Dlu=0, Xn&=1, PXz=2, n9u=3, zPQ=4, uPX=5
 uPXn&=6, uPXPXz=7, uPXn9u=8, uPXzlQ=9
@@ -193,7 +247,37 @@ wn-=10, wn-Xn&=11, ..., wn-uPXzlQ=19
 PXzn-wn-=20, ..., PXzn-wn-zPQ=24
 ```
 - 5進法ベースの構造（0-4基本、5×n+mで拡張）
-- この記法はサーバー表示文字を使った表現
+
+---
+
+## ナビゲーター調査結果（サーバークエリで確定）
+
+### ナビゲーターページ応答
+クエリ: `czMnX ePXMn-nQ8(` = `[view (navigator)]`
+```
+[result [title (navigator)]
+ [definition [(navigator)
+   (for navigation QfnQ& is current definition)
+   (you execute "[view [about command]]" link, command chapters also)
+   (you execute "[view [about QfnQ&]]" link, QfnQ& chapters also)
+   (you execute "[view [about dictionary]]" link, dictionary chapters also)]]]
+```
+→ **ナビゲーターが「current definition = QfnQ&」と回答**
+
+### QfnQ& について
+- `czMnX eXnkl QfnQ&8(` = `[view [about QfnQ&]]` で情報取得済み
+- Q.0が最初の章: `(chapter Q.0 the_code and QfnQ&)`
+- QfnQ& はQ問題シリーズの総合識別子/テーマ名
+- ナビゲーターの3つのセクション: `QnzF0lX`(command), `QfnQ&`(Q-series), `Qn&n-QPznk`(the_graph)
+
+### サーバーでの問題回答確認
+- Q.0 の正答 = `PXz` (=2) → サーバーで **正解確認済み**
+- Q.3 の正答 = `zPQ` (=4) → サーバーで **正解確認済み**
+
+### 鍵文字列の候補
+質問「for navigation, what is current definition?」の答え = **`QfnQ&`**
+内部コード列: **[5, 0, 17, 5, 3]**
+（Q=5, f=0, n=17, Q=5, &=3）
 
 ---
 
@@ -250,9 +334,10 @@ PXzn-wn-=20, ..., PXzn-wn-zPQ=24
 - [x] 文字列デコード成功（33文字の質問文 + 5文字のエラーメッセージ）
 - [x] 5文字の文字コード対応判明（wrong = M5PWz = コード19,20,22,9,21）
 - [x] サーバーAPI調査（有効文字28種、全入力で同一応答）
-- [ ] **全文字コード対応の解明**（残り19文字）
-- [ ] **質問文の完全解読**
-- [ ] **鍵文字列の特定**
+- [x] **全文字コード対応の解明** — charcode_query.jsでサーバーに直接問い合わせて全28文字+負コード3文字を取得
+- [x] **質問文の完全解読** — `,lz-QPwnQu-wnz-kPX-MPz-P-zlWlQD-<` = "for navigation, what is current definition?"
+- [x] **ナビゲーター調査** — current definition = QfnQ& とサーバーが回答
+- [ ] **鍵文字列の検証** — QfnQ& (コード [5,0,17,5,3]) をRust評価器で検証
 - [ ] 正しい鍵で画像出力
 - [ ] 画像レンダリング
 - [ ] 最終回答導出

@@ -46,7 +46,12 @@
       "Bash(node -e \"\n  async function main\\(\\) {\n    const res = await fetch\\(''https://stars-2026-hp.xyz/'', {\n      method: ''POST'',\n      headers: { ''content-type'': ''application/json'' },\n      body: JSON.stringify\\({ input: ''$input'' }\\),\n    }\\);\n    const data = await res.json\\(\\);\n    console.log\\(JSON.stringify\\(data\\)\\);\n  }\n  main\\(\\).catch\\(e => console.error\\(e\\)\\);\n  \")",
       "Bash(done)",
       "Bash(node scripts/test_server.js:*)",
-      "Bash(node -e '\nasync function main\\(\\) {\n  // Get full response with all headers\n  const res = await fetch\\(\"\"https://stars-2026-hp.xyz/\"\", {\n    method: \"\"POST\"\",\n    headers: { \"\"content-type\"\": \"\"application/json\"\" },\n    body: JSON.stringify\\({ input: \"\"M5PWz\"\" }\\),\n  }\\);\n  console.log\\(\"\"Status:\"\", res.status\\);\n  console.log\\(\"\"Headers:\"\", Object.fromEntries\\(res.headers.entries\\(\\)\\)\\);\n  const text = await res.text\\(\\);\n  console.log\\(\"\"Body:\"\", text\\);\n}\nmain\\(\\).catch\\(e => console.error\\(e\\)\\);\n')"
+      "Bash(node -e '\nasync function main\\(\\) {\n  // Get full response with all headers\n  const res = await fetch\\(\"\"https://stars-2026-hp.xyz/\"\", {\n    method: \"\"POST\"\",\n    headers: { \"\"content-type\"\": \"\"application/json\"\" },\n    body: JSON.stringify\\({ input: \"\"M5PWz\"\" }\\),\n  }\\);\n  console.log\\(\"\"Status:\"\", res.status\\);\n  console.log\\(\"\"Headers:\"\", Object.fromEntries\\(res.headers.entries\\(\\)\\)\\);\n  const text = await res.text\\(\\);\n  console.log\\(\"\"Body:\"\", text\\);\n}\nmain\\(\\).catch\\(e => console.error\\(e\\)\\);\n')",
+      "Bash(iconv:*)",
+      "Bash(ls:*)",
+      "Bash(node scripts/charcode_query.js:*)",
+      "Bash(node scripts/query_tokens.js:*)",
+      "Bash(node scripts/navigator_query.js:*)"
     ]
   }
 }
