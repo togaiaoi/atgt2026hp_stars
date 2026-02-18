@@ -20,7 +20,17 @@
       "Bash(\"$USERPROFILE/.cargo/bin/lazyk-rust\" --help)",
       "Bash(\"$USERPROFILE/.cargo/bin/cargo\" init --name ski-eval ski_eval_rs)",
       "Bash(\"$USERPROFILE/.cargo/bin/cargo\" build --release)",
-      "Bash(d:/github/atgt2026hp_stars/ski_eval_rs/target/release/ski-eval.exe:*)"
+      "Bash(d:/github/atgt2026hp_stars/ski_eval_rs/target/release/ski-eval.exe:*)",
+      "Bash($USERPROFILE/.cargo/bin/cargo build --release)",
+      "Bash(/c/Users/mizuki/.cargo/bin/cargo build --release)",
+      "Bash(./ski_eval_rs/target/release/ski-eval.exe:*)",
+      "Bash(./target/release/ski-eval.exe:*)",
+      "Bash(python3:*)",
+      "Bash(./ski_eval_rs/target/release/ski-eval:*)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(export PATH=\"/c/Users/mizuki/.cargo/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(PATH=\"/c/Users/mizuki/.cargo/bin:$PATH\" cargo build:*)",
+      "Bash(PATH=\"/c/Users/mizuki/.cargo/bin:$PATH\" ./ski_eval_rs/target/release/ski-eval.exe:*)"
     ]
   }
 }
