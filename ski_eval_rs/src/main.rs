@@ -2707,6 +2707,177 @@ fn main() {
                 }
             }
         }
+        "keyfind" => {
+            // Timing side-channel attack on key check.
+            // Run I/O interpreter to Step 2 (input), then try each character code
+            // 1-24 as a single-char input and measure reduction steps.
+            // The correct character takes more steps (comparison proceeds further).
+
+            // === Step 1: Output (question text) ===
+            eprintln!("=== KEYFIND: Running I/O to reach input step ===");
+            let mut current = result;
+            let fuel_per_step: u64 = 50_000_000;
+
+            // Step 1: extract and skip output
+            let mut f1 = fuel_per_step;
+            let tag = pair1_fst(&mut arena, current, &mut f1);
+            let mut f2 = fuel_per_step;
+            let q = pair1_snd(&mut arena, current, &mut f2);
+            let mut f3 = fuel_per_step;
+            let p1_node = pair1_fst(&mut arena, tag, &mut f3);
+            let p1 = decode_church_num(&mut arena, p1_node, fuel_per_step);
+            eprintln!("Step 1: p1={:?} (should be 1=output)", p1);
+
+            // Get continuation from output
+            let mut fq2 = fuel_per_step;
+            let cont = pair1_snd(&mut arena, q, &mut fq2);
+            current = cont;
+
+            // Step 2: should be input
+            let mut f1 = fuel_per_step;
+            let tag2 = pair1_fst(&mut arena, current, &mut f1);
+            let mut f2 = fuel_per_step;
+            let q_input = pair1_snd(&mut arena, current, &mut f2);
+            let mut f3 = fuel_per_step;
+            let p1_node2 = pair1_fst(&mut arena, tag2, &mut f3);
+            let p1_2 = decode_church_num(&mut arena, p1_node2, fuel_per_step);
+            eprintln!("Step 2: p1={:?} (should be 2=input)", p1_2);
+
+            if p1_2 != Some(2) {
+                eprintln!("ERROR: Step 2 is not input! Aborting.");
+            } else {
+                eprintln!("=== Reached input step. Q node ready. ===");
+                eprintln!("Arena size before tests: {} nodes", arena.nodes.len());
+
+                // Save arena snapshot
+                let saved_nodes = arena.nodes.clone();
+                let q_idx = q_input; // Q = λx.continuation(x)
+
+                // Build key one character at a time
+                let mut found_key: Vec<u64> = Vec::new();
+                let max_key_len = 30;
+
+                for pos in 0..max_key_len {
+                    eprintln!("\n=== Testing position {} ===", pos);
+                    let mut best_char: u64 = 0;
+                    let mut best_steps: u64 = 0;
+                    let mut results: Vec<(u64, u64)> = Vec::new();
+
+                    for test_char in 1u64..=24 {
+                        // Restore arena
+                        arena.nodes.clear();
+                        arena.nodes.extend_from_slice(&saved_nodes);
+
+                        // Build input string: [found_key..., test_char]
+                        // String is built as pair chain with outermost = last pushed
+                        // The program reads outer-first, so outermost char is read first
+                        // For the question decoding, outermost was last char (reversed)
+                        // So we push chars in REVERSE reading order:
+                        // string "c1 c2 c3" = pair(c3, pair(c2, pair(c1, nil)))
+                        // This way outer-first traversal gives c3, c2, c1 → reversed = c1, c2, c3
+
+                        // Build the test string in reverse order
+                        let mut all_chars = found_key.clone();
+                        all_chars.push(test_char);
+
+                        // Build: pair(last, pair(second_to_last, ... pair(first, nil)))
+                        let nil = make_false(&mut arena);
+                        let mut str_node = nil;
+                        for &ch in all_chars.iter() {
+                            let ch_num = make_scott_num(&mut arena, ch);
+                            str_node = make_pair(&mut arena, ch_num, str_node);
+                        }
+
+                        // Apply Q to the string
+                        let test_fuel: u64 = 200_000_000;
+                        let app = arena.alloc(APP, q_idx, str_node);
+                        let mut remaining = test_fuel;
+                        arena.whnf(app, &mut remaining);
+                        let steps = test_fuel - remaining;
+
+                        results.push((test_char, steps));
+
+                        if steps > best_steps {
+                            best_steps = steps;
+                            best_char = test_char;
+                        }
+                    }
+
+                    // Sort by steps and report
+                    results.sort_by(|a, b| b.1.cmp(&a.1));
+                    eprintln!("Position {} results (top 5):", pos);
+                    for (i, (ch, steps)) in results.iter().take(5).enumerate() {
+                        eprintln!("  #{}: char={} steps={}", i+1, ch, steps);
+                    }
+
+                    // Check if there's a clear winner (significantly more steps than second)
+                    if results.len() >= 2 {
+                        let top = results[0].1;
+                        let second = results[1].1;
+                        let ratio = if second > 0 { top as f64 / second as f64 } else { 999.0 };
+                        eprintln!("  Top/second ratio: {:.3}", ratio);
+
+                        if ratio < 1.01 {
+                            // All characters take similar steps → key might be complete
+                            eprintln!("  No clear winner → key might be complete at length {}", pos);
+
+                            // Try the current key (without the test char) as the full key
+                            // Check if it produces a non-error response
+                            arena.nodes.clear();
+                            arena.nodes.extend_from_slice(&saved_nodes);
+
+                            let nil = make_false(&mut arena);
+                            let mut str_node = nil;
+                            for &ch in found_key.iter() {
+                                let ch_num = make_scott_num(&mut arena, ch);
+                                str_node = make_pair(&mut arena, ch_num, str_node);
+                            }
+
+                            let test_fuel: u64 = 500_000_000;
+                            let app = arena.alloc(APP, q_idx, str_node);
+                            let mut remaining = test_fuel;
+                            arena.whnf(app, &mut remaining);
+                            let current_result = arena.follow(app);
+
+                            // Check if the result is the error message or something different
+                            let mut fq1 = fuel_per_step;
+                            let tag_r = pair1_fst(&mut arena, current_result, &mut fq1);
+                            let mut fq2 = fuel_per_step;
+                            let q_r = pair1_snd(&mut arena, current_result, &mut fq2);
+                            let mut fq3 = fuel_per_step;
+                            let p1_r = pair1_fst(&mut arena, tag_r, &mut fq3);
+                            let p1_val = decode_church_num(&mut arena, p1_r, fuel_per_step);
+                            eprintln!("  Full key test: p1={:?}", p1_val);
+
+                            if p1_val == Some(1) {
+                                // Output instruction → might be outputting key data!
+                                let mut fd = fuel_per_step;
+                                let data_r = pair1_fst(&mut arena, q_r, &mut fd);
+                                let mut fp = fuel_per_step;
+                                let p2_r = pair1_snd(&mut arena, tag_r, &mut fp);
+                                let p2_val = decode_church_num(&mut arena, p2_r, fuel_per_step);
+                                eprintln!("  Output type p2={:?}", p2_val);
+
+                                if p2_val == Some(1) {
+                                    // String output
+                                    let s = decode_string(&mut arena, data_r, fuel_per_step * 4);
+                                    eprintln!("  Output string: {:?}", s);
+                                }
+                            }
+
+                            break;
+                        }
+                    }
+
+                    found_key.push(best_char);
+                    eprintln!("  Best char for position {}: {} (steps: {})", pos, best_char, best_steps);
+                    eprintln!("  Key so far: {:?}", found_key);
+                }
+
+                eprintln!("\n=== KEYFIND RESULT ===");
+                eprintln!("Found key codes: {:?}", found_key);
+            }
+        }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);
         }
