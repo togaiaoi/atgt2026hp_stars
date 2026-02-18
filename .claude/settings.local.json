@@ -51,7 +51,8 @@
       "Bash(ls:*)",
       "Bash(node scripts/charcode_query.js:*)",
       "Bash(node scripts/query_tokens.js:*)",
-      "Bash(node scripts/navigator_query.js:*)"
+      "Bash(node scripts/navigator_query.js:*)",
+      "Bash(/c/Python313/python:*)"
     ]
   }
 }

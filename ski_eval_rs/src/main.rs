@@ -40,6 +40,11 @@ impl Arena {
 
     #[inline]
     fn alloc(&mut self, tag: u8, a: u32, b: u32) -> u32 {
+        // Arena size limit: 500M nodes (~6GB) to prevent OOM
+        if self.nodes.len() >= 500_000_000 {
+            eprintln!("ARENA LIMIT: {} nodes reached, aborting", self.nodes.len());
+            std::process::exit(1);
+        }
         let idx = self.nodes.len() as u32;
         self.nodes.push(Node { tag, a, b });
         idx
@@ -2653,19 +2658,66 @@ fn main() {
                             Some(2) => {
                                 // Image output
                                 eprintln!("OUTPUT IMAGE (quadtree)");
-                                // Render the image quadtree
                                 let sz = if grid_size > 0 { grid_size as usize } else { 128 };
+
+                                // Probe the image data structure first
+                                eprintln!("  data node: {}", &describe(&arena, data, 0)[..300.min(describe(&arena, data, 0).len())]);
+                                let data_bool = decode_bool(&mut arena, data, 500000);
+                                eprintln!("  data as bool: {:?}", data_bool);
+
+                                // Try pair1 extraction to see quadtree structure
+                                {
+                                    let mut f1 = 1_000_000u64;
+                                    let p1f = pair1_fst(&mut arena, data, &mut f1);
+                                    let mut f2 = 1_000_000u64;
+                                    let p1s = pair1_snd(&mut arena, data, &mut f2);
+                                    let p1f_bool = decode_bool(&mut arena, p1f, 500000);
+                                    let p1s_bool = decode_bool(&mut arena, p1s, 500000);
+                                    eprintln!("  pair1_fst(data) as bool: {:?}  node: {}", p1f_bool, &describe(&arena, p1f, 0)[..200.min(describe(&arena, p1f, 0).len())]);
+                                    eprintln!("  pair1_snd(data) as bool: {:?}  node: {}", p1s_bool, &describe(&arena, p1s, 0)[..200.min(describe(&arena, p1s, 0).len())]);
+
+                                    // Try pair2 extraction too
+                                    let mut f3 = 1_000_000u64;
+                                    let p2f = pair_fst(&mut arena, data, &mut f3);
+                                    let mut f4 = 1_000_000u64;
+                                    let p2s = pair_snd(&mut arena, data, &mut f4);
+                                    let p2f_bool = decode_bool(&mut arena, p2f, 500000);
+                                    let p2s_bool = decode_bool(&mut arena, p2s, 500000);
+                                    eprintln!("  pair_fst(data) as bool: {:?}  node: {}", p2f_bool, &describe(&arena, p2f, 0)[..200.min(describe(&arena, p2f, 0).len())]);
+                                    eprintln!("  pair_snd(data) as bool: {:?}  node: {}", p2s_bool, &describe(&arena, p2s, 0)[..200.min(describe(&arena, p2s, 0).len())]);
+                                }
+
+                                // Try diamond selectors on data
+                                for sel_idx in 0..5 {
+                                    let sel = build_diamond_sel(&mut arena, sel_idx);
+                                    let app = arena.alloc(APP, data, sel);
+                                    let mut sf = 2_000_000u64;
+                                    arena.whnf(app, &mut sf);
+                                    let result = arena.follow(app);
+                                    let as_bool = decode_bool(&mut arena, result, 1_000_000);
+                                    eprintln!("  data(sel_{}) as bool: {:?}  node: {}", sel_idx, as_bool,
+                                        &describe(&arena, result, 0)[..200.min(describe(&arena, result, 0).len())]);
+                                }
+
+                                // Render using diamond_church method (Church-encoded 5-tuple selectors)
                                 let mut pix = vec![128u8; sz * sz];
-                                let mut img_fuel = 500_000_000u64;
+                                let mut img_fuel = 2_000_000_000u64;
                                 let mut img_count = 0u64;
-                                render_image_quadtree(
+                                eprintln!("  Arena nodes before render: {}", arena.nodes.len());
+                                render_diamond_church(
                                     &mut arena, data, &mut pix,
                                     0, 0, sz, sz,
-                                    &mut img_fuel, &mut img_count,
+                                    &mut img_fuel, &mut img_count, 0,
                                 );
-                                eprintln!("  Rendered {} pixels", img_count);
-                                let fname = format!("{}_io_image_{}x{}.pgm", img_path, sz, sz);
+                                let non_gray = pix.iter().filter(|&&p| p != 128).count();
+                                let white = pix.iter().filter(|&&p| p == 255).count();
+                                let black = pix.iter().filter(|&&p| p == 0).count();
+                                eprintln!("  [diamond_church] Rendered {} pixels, non-gray={}/{} (white={}, black={}, gray={})",
+                                    img_count, non_gray, sz*sz, white, black, sz*sz - non_gray);
+                                eprintln!("  Arena nodes after render: {}", arena.nodes.len());
+                                let fname = format!("{}_io_diamond_{}x{}.pgm", img_path, sz, sz);
                                 write_pgm(&fname, sz, sz, &pix);
+                                eprintln!("  Saved: {}", fname);
                             }
                             _ => {
                                 eprintln!("OUTPUT with unknown p2={:?}", p2);
@@ -3827,6 +3879,201 @@ fn render_quadtree_v2(
     render_quadtree_v2(arena, ne, pixels, x + half, y, half, img_width, fuel, count);
     render_quadtree_v2(arena, sw, pixels, x, y + half, half, img_width, fuel, count);
     render_quadtree_v2(arena, se, pixels, x + half, y + half, half, img_width, fuel, count);
+}
+
+/// Render using pair1 (1-arg Scott pairs) nested:
+/// pair1(cond, pair1(qa, pair1(qb, pair1(qc, qd))))
+fn render_pair1_nested(
+    arena: &mut Arena,
+    node: u32,
+    pixels: &mut [u8],
+    x: usize,
+    y: usize,
+    size: usize,
+    img_width: usize,
+    fuel: &mut u64,
+    count: &mut u64,
+) {
+    if *fuel == 0 || size == 0 { return; }
+
+    let is_bool = decode_bool(arena, node, (*fuel).min(200000));
+    match is_bool {
+        Some(false) => {
+            fill_rect(pixels, x, y, size, 255, img_width);
+            *count += (size * size) as u64;
+            return;
+        }
+        Some(true) => {
+            fill_rect(pixels, x, y, size, 0, img_width);
+            *count += (size * size) as u64;
+            return;
+        }
+        None => {}
+    }
+
+    if size <= 1 {
+        // Extract cond using pair1_fst
+        let cond = pair1_fst(arena, node, fuel);
+        let b = decode_bool(arena, cond, (*fuel).min(200000));
+        let color = match b {
+            Some(true) => 0u8,
+            Some(false) => 255u8,
+            None => 128u8,
+        };
+        if x < img_width && y < img_width {
+            pixels[y * img_width + x] = color;
+        }
+        *count += 1;
+        return;
+    }
+
+    // pair1(cond, rest) → pair1_snd = rest
+    let rest = pair1_snd(arena, node, fuel);
+    // pair1(qa, rest2) → pair1_fst = qa
+    let qa = pair1_fst(arena, rest, fuel);
+    let rest2 = pair1_snd(arena, rest, fuel);
+    // pair1(qb, rest3)
+    let qb = pair1_fst(arena, rest2, fuel);
+    let rest3 = pair1_snd(arena, rest2, fuel);
+    // pair1(qc, qd)
+    let qc = pair1_fst(arena, rest3, fuel);
+    let qd = pair1_snd(arena, rest3, fuel);
+
+    let half = size / 2;
+    render_pair1_nested(arena, qa, pixels, x, y, half, img_width, fuel, count);
+    render_pair1_nested(arena, qb, pixels, x + half, y, half, img_width, fuel, count);
+    render_pair1_nested(arena, qc, pixels, x, y + half, half, img_width, fuel, count);
+    render_pair1_nested(arena, qd, pixels, x + half, y + half, half, img_width, fuel, count);
+}
+
+/// Build a 5-tuple selector in the arena: sel_i(a)(b)(c)(d)(e) = <i-th arg>
+/// Diamond structure: diamond(COND)(QA)(QB)(QC)(QD) = λf. f(COND)(QA)(QB)(QC)(QD)
+/// So data(sel_i) extracts the i-th field.
+///
+/// Selectors derived:
+///   sel_0 = S(KK)(S(KK)(S(KK)(S(KK)(I))))
+///   sel_1 = K(S(KK)(S(KK)(S(KK)(I))))
+///   sel_2 = K(K(S(KK)(S(KK)(I))))
+///   sel_3 = K(K(K(S(KK)(I))))
+///   sel_4 = K(K(K(K(I))))
+fn build_diamond_sel(arena: &mut Arena, pos: usize) -> u32 {
+    // Build the "core" for position pos:
+    // core_4 = I
+    // core_3 = S(KK)(I)
+    // core_2 = S(KK)(S(KK)(I))
+    // core_1 = S(KK)(S(KK)(S(KK)(I)))
+    // core_0 = S(KK)(S(KK)(S(KK)(S(KK)(I))))
+    //
+    // sel_i = K^i(core_i)  (i layers of K wrapping)
+
+    let i_node = arena.alloc(I, NIL, NIL);
+    let k_node = arena.alloc(K, NIL, NIL);
+    let s_node = arena.alloc(S, NIL, NIL);
+
+    // Build KK
+    let kk = arena.alloc(K1, k_node, NIL); // K applied to K
+
+    // Build the core: S(KK) applied (4-pos) times to I
+    let mut core = i_node;
+    for _ in 0..(4 - pos) {
+        // S(KK)(core) = S2(KK, core)
+        let s1 = arena.alloc(S1, kk, NIL); // S applied to KK
+        core = arena.alloc(S2, kk, core);   // S(KK)(core)
+    }
+
+    // Wrap in K layers: K^pos(core)
+    let mut result = core;
+    for _ in 0..pos {
+        result = arena.alloc(K1, result, NIL); // K(result)
+    }
+    result
+}
+
+/// Render image using diamond (Church-encoded 5-tuple) structure.
+/// diamond(COND)(QA)(QB)(QC)(QD) = λf. f(COND)(QA)(QB)(QC)(QD)
+/// data(sel_i) extracts the i-th field.
+fn render_diamond_church(
+    arena: &mut Arena,
+    node: u32,
+    pixels: &mut [u8],
+    x: usize,
+    y: usize,
+    size: usize,
+    img_width: usize,
+    fuel: &mut u64,
+    count: &mut u64,
+    depth: usize,
+) {
+    if *fuel == 0 || size == 0 { return; }
+    if depth > 20 { return; } // safety limit
+
+    // Check if it's a simple boolean (uniform color leaf)
+    let is_bool = decode_bool(arena, node, (*fuel).min(500000));
+    match is_bool {
+        Some(false) => {
+            fill_rect(pixels, x, y, size, 255, img_width); // false = white
+            *count += (size * size) as u64;
+            return;
+        }
+        Some(true) => {
+            fill_rect(pixels, x, y, size, 0, img_width); // true = black
+            *count += (size * size) as u64;
+            return;
+        }
+        None => {}
+    }
+
+    if size <= 1 {
+        // At pixel level, extract COND
+        let sel0 = build_diamond_sel(arena, 0);
+        let app = arena.alloc(APP, node, sel0);
+        arena.whnf(app, fuel);
+        let cond = arena.follow(app);
+        let b = decode_bool(arena, cond, (*fuel).min(500000));
+        if *count < 8 {
+            eprintln!("    pixel({},{}) depth={} cond_bool={:?} node_tag={} cond: {}",
+                x, y, depth, b, arena.nodes[arena.follow(node) as usize].tag,
+                &describe(arena, cond, 0)[..100.min(describe(arena, cond, 0).len())]);
+        }
+        let color = match b {
+            Some(true) => 0u8,
+            Some(false) => 255u8,
+            None => 128u8,
+        };
+        if x < img_width && y < img_width {
+            pixels[y * img_width + x] = color;
+        }
+        *count += 1;
+        return;
+    }
+
+    // Extract 4 quadrants using proper selectors
+    let sel1 = build_diamond_sel(arena, 1);
+    let sel2 = build_diamond_sel(arena, 2);
+    let sel3 = build_diamond_sel(arena, 3);
+    let sel4 = build_diamond_sel(arena, 4);
+
+    let app1 = arena.alloc(APP, node, sel1);
+    arena.whnf(app1, fuel);
+    let qa = arena.follow(app1);
+
+    let app2 = arena.alloc(APP, node, sel2);
+    arena.whnf(app2, fuel);
+    let qb = arena.follow(app2);
+
+    let app3 = arena.alloc(APP, node, sel3);
+    arena.whnf(app3, fuel);
+    let qc = arena.follow(app3);
+
+    let app4 = arena.alloc(APP, node, sel4);
+    arena.whnf(app4, fuel);
+    let qd = arena.follow(app4);
+
+    let half = size / 2;
+    render_diamond_church(arena, qa, pixels, x, y, half, img_width, fuel, count, depth + 1);
+    render_diamond_church(arena, qb, pixels, x + half, y, half, img_width, fuel, count, depth + 1);
+    render_diamond_church(arena, qc, pixels, x, y + half, half, img_width, fuel, count, depth + 1);
+    render_diamond_church(arena, qd, pixels, x + half, y + half, half, img_width, fuel, count, depth + 1);
 }
 
 /// Fill a rectangular region with a color.

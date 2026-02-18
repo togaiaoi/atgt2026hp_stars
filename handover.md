@@ -9,104 +9,95 @@
 1. **SKI評価器の構築**: Rust製のグラフリダクション評価器を `ski_eval_rs/` に構築済み。arenaベース、遅延評価、fuel制限あり。
 2. **I/Oプロトコルの解明**: pair1(pair1(p1,p2), Q) 構造でChurch数タグを使う。出力(p1=1)、入力(p1=2)、停止(p1=0)。
 3. **I/Oフローの確認**: 空入力時 → 質問出力(33文字) → 鍵入力要求 → "wrong"出力(5文字) → 停止
-4. **文字列デコード成功**: Convention B（pair_fst=rest, pair_snd=value）で33文字の質問文と5文字のエラーメッセージを取得。コード範囲は1-24。
-5. **5文字の文字コード判明**: エラーメッセージ "wrong" がサーバー上で "M5PWz" と表示されることから:
-   - 19→M→w, 20→5→r, 22→P→o, 9→W→n, 21→z→g
+4. **文字列デコード成功**: Convention B（pair_fst=value, pair_snd=rest、逆順push）で文字列を取得。
+5. **全文字コード対応表の取得**: charcode_query.jsでサーバーに直接問い合わせ、0-24の全コード+負コード3個を解明。
+6. **質問文の完全解読**: `,lz-QPwnQu-wnz-kPX-MPz-P-zlWlQD-<` = "for navigation, what is current definition?"
+7. **ナビゲーター調査**: `[view (navigator)]` で "current definition = QfnQ&" と回答。
+8. **鍵文字列の確定と検証**: **QfnQ& (コード [5,0,17,5,3])** が正解。
+   - プログラムが "wrong" の代わりに鍵を5回エコーし、画像データ(p2=2)を出力。
 
-### 未完了（ここから先が必要）
-1. **残り19文字のコード対応を解明する**
-2. **質問文（33文字）を完全に解読する**
-3. **質問に正しく答えて鍵文字列を特定する**
-4. **鍵文字列を入力して画像を取得する**
-5. **画像から最終回答を読み取る**
+### 残り1ステップ
+1. **画像レンダリング** — diamond構造のデコードにOOM問題あり。5引数セレクタで再試行が必要。
+2. **最終回答を画像から読み取る**
 
-## 鍵になるデータ
+## 鍵検証の詳細
 
-### 質問文（内部コード列）
+### I/Oフロー（鍵QfnQ&入力時）
 ```
-2, 8, 16, 5, 6, 20, 6, 19, 8, 22, 8, 19, 22, 21, 8, 24, 22, 23, 8, 19, 17, 1, 8, 7, 5, 17, 1, 22, 5, 8, 19, 6, 13
-```
-- 8=スペースと仮定すると8単語（長さ: 1-6-1-3-3-3-6-3）
-- 既知の5文字で部分復号: `? ??_r_w o wog ?o? w?? ?_r??o_r w_?`
-
-### サーバーの文字セット（28種）
-```
-& * , - 0 5 9 < C D F M P Q W X [ f j k l n o u w y z {
+Step 1: 出力・文字列 (p1=1, p2=1) — 33文字の質問文
+Step 2: 入力・文字列 (p1=2, p2=1) — 鍵 [5,0,17,5,3] を入力
+Step 3: 出力・文字列 (p1=1, p2=1) — 鍵を5回繰り返し (25文字)
+Step 4: 出力・画像   (p1=1, p2=2) — 画像データ出力 ← ★ここ
+Step 5: 停止 (p1=0, p2=0)
 ```
 
-### 外部入手した全質問テキスト（サーバー表示文字）
-```
-cMPQP czMn5 e-nQPz lfXn& QP5959PX QnQ Qn&n-QPznk8(
-czlWlQD cePX,P5 QPwF9zPX QnQ PX9M kPX QP5959PX QnQ &n-QPznk8
-ezPX -nW Qnkn<lW uPXl-FXnuz QP5959PX QnQ Qn&n-QPznk8
-cezPX -nW kn<lW 5959PX Qn&n-QPznk QPP9znX lf&n{QPX8
-```
-
-### 整数コンパクト表現（5進法ベース、サーバー記法）
-```
-0=Dlu, 1=Xn&, 2=PXz, 3=n9u, 4=zPQ, 5=uPX, ...
-10=wn-, ..., 19=wn-uPXzlQ, 20=PXzn-wn-, ..., 24=PXzn-wn-zPQ
+### 鍵文字列の構築方法（Rust）
+```rust
+let mut str_node = make_false(&mut arena); // nil
+for &code in key_codes.iter().rev() {      // 逆順pushが重要
+    let ch_num = make_scott_num(&mut arena, code);
+    str_node = make_pair(&mut arena, ch_num, str_node); // pair_fst=value
+}
 ```
 
-## 試して失敗したアプローチ
-
-### 1. タイミングサイドチャネル攻撃
-- keyfindモードとして実装済み（main.rs内）
-- Step2のQ(λ)に各文字コードを適用し、ステップ数の差で正解文字を判別する想定
-- 遅延評価のため比較が即座に発火せず、全文字で同一ステップ数になった
-- 改良版（結果を深く強制評価）は実装済みだが未検証
-
-### 2. サーバーブルートフォース
-- 28有効文字の全組み合わせを試行
-- **全ての非空入力に対して同一レスポンスが返る** → ブルートフォース不可能
-- サーバーは入力内容に関わらず「鍵チェック→wrong」の結果を返す
-
-## 推奨する次のアプローチ
-
-### A. 質問文の解読（最有望）
-- 外部入手のサーバー表示テキストを解析して、表示文字→英語の完全対応表を作る
-- 「8(」区切りで4セクション、「c」で始まるパターンがある
-- ここにコンパクト整数表現の知識を組み合わせると、数値リテラルを読み取れる可能性
-- 質問が解読できれば、答え（=鍵文字列）を推測できる
-
-### B. keyfindモードの改良
-- Q(input)の結果をもっと深く強制評価する（出力文字列全体を評価するなど）
-- 正解文字ならStep3で"wrong"以外が出るはず → ステップ数に差が出る
-
-### C. サーバー表示文字と内部コードの対応解明
-- コンパクト整数表現テーブルの記号（D,l,u,X,n,&,P,z,Q,w,9,-等）は全てサーバー有効文字に含まれる
-- テーブルの構造（5進法）と、質問文テキスト中の数値リテラルを照合する
-
-### D. 鍵チェック部分のSKI式を直接解読
-- ヒント: 「鍵チェックの部分を解読したりすることで分かるぞ」
-- I/O Step2のQ(λ)を解析し、比較対象の文字列を直接取り出す
-
-## 重要な注意点
-
-1. **Convention B**: 文字列リストは pair_fst=rest, pair_snd=value。ヒント記述とは逆。
-2. **2種類のpair**: I/Oタプル（pair1, 1引数Scott）とリスト（pair2, 2引数Scott）は構造が異なる。
-3. **Church数 vs 2の補数整数**: I/Oタグはchurch数、文字コードは2の補数ビット列。混同注意。
-4. **サーバーの表示文字セット**: 通常のASCIIではなく、28種の特殊文字セットを使用。
-5. **遅延評価**: SKI評価器は遅延グラフリダクション。比較などは結果が必要になるまで評価されない。
-
-## ビルド・実行コマンド
+### 実行コマンド
 ```bash
-# ビルド
 cd ski_eval_rs && PATH="/c/Users/mizuki/.cargo/bin:$PATH" cargo build --release
+./ski_eval_rs/target/release/ski-eval.exe very_large_txt/stars_compact.txt \
+  --fuel 5000000000 --decode io --key 5,0,17,5,3 --img images/trykey --grid 64
+```
 
-# I/Oインタプリタ実行
-./ski_eval_rs/target/release/ski-eval.exe very_large_txt/stars_compact.txt --fuel 2000000000 --decode io --img images/io_test
+## 画像レンダリングの課題
 
-# 鍵探索（タイミング攻撃）
-./ski_eval_rs/target/release/ski-eval.exe very_large_txt/stars_compact.txt --fuel 2000000000 --decode keyfind --img images/keyfind
+### 画像データの構造
+画像データは **diamond（Church-encoded 5-tuple）**:
+```
+diamond(COND)(QA)(QB)(QC)(QD) = λf. f(COND)(QA)(QB)(QC)(QD)
+```
+- COND: ブール値（葉の場合のピクセル色）
+- QA=NW, QB=NE, QC=SW, QD=SE: 4象限の子ノード
+
+### pair1セレクタでは失敗する理由
+pair1のK/KIセレクタを適用すると、5引数のうち余分な引数が互いに適用されて巨大な計算が発生しOOMになる。
+
+### 正しい5引数セレクタ（数学的に検証済み）
+```
+sel_0 = S(KK)(S(KK)(S(KK)(S(KK)(I))))  → COND を抽出
+sel_1 = K(S(KK)(S(KK)(S(KK)(I))))      → QA (NW) を抽出
+sel_2 = K(K(S(KK)(S(KK)(I))))          → QB (NE) を抽出
+sel_3 = K(K(K(S(KK)(I))))              → QC (SW) を抽出
+sel_4 = K(K(K(K(I))))                  → QD (SE) を抽出
+```
+使い方: `data(sel_i)` で i番目のフィールドを取得。
+
+### 追加で必要なこと
+- Rust評価器にこの5引数セレクタを使ったレンダラを実装する
+- アリーナサイズ上限を追加する（現在46GBでOOMクラッシュ）
+- 小さい解像度（4x4, 8x8）から試して正しくレンダリングできるか確認
+
+## 全文字コード対応表
+```
+コード →  表示文字
+  0   →  f        10  →  F        20  →  W
+  1   →  w        11  →  *        21  →  M
+  2   →  <        12  →  y        22  →  P
+  3   →  &        13  →  ,        14  →  C
+  5   →  Q        15  →  {        24  →  X
+  6   →  l        16  →  D
+  7   →  u        17  →  n        負のコード:
+  8   →  -        18  →  0        -1  →  [
+  9   →  5        19  →  z        -2  →  o
+  4   →  9        23  →  k        -3  →  j
 ```
 
 ## 主要ファイル
 | ファイル | 説明 |
 |---------|------|
-| `ski_eval_rs/src/main.rs` | Rust SKI評価器（~3200行） |
+| `ski_eval_rs/src/main.rs` | Rust SKI評価器（~3500行） |
 | `very_large_txt/stars_compact.txt` | コンパクト形式のプログラム |
-| `analysis_charcode.md` | 文字コード解析メモ |
-| `reference/hint-new.md` | 最新GMヒント（最重要） |
+| `CLAUDE.md` | 詳細な技術情報・仕様・確定事項 |
+| `reference/couldbewrong/reference.md` | プレイヤー解析（言語仕様・問題解答集） |
+| `scripts/navigator_query.js` | サーバーナビゲータークエリスクリプト |
+| `scripts/charcode_query.js` | 文字コード問い合わせスクリプト |
 | `send/send.js` | サーバー提出スクリプト（他プレイヤー作） |
-| `scripts/test_server.js` | サーバーテスト用スクリプト |
+| `images/` | レンダリング出力（PGM形式） |

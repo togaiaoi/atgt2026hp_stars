@@ -120,8 +120,12 @@ IO命令 = pair1(pair1(p1, p2), Q)
 3. **Step 3**: 出力・文字列 (p1=1, p2=1) — 5文字のメッセージ（"wrong"）
 4. **Step 4**: 停止 (p1=0, p2=0)
 
-正しい鍵を入力すれば:
-- 鍵データの出力 → 画像データのデコード → 画像出力 → 最終回答
+正しい鍵（QfnQ& = コード[5,0,17,5,3]）入力時:
+1. **Step 1**: 出力・文字列 (p1=1, p2=1) — 33文字の質問文
+2. **Step 2**: 入力・文字列 (p1=2, p2=1) — 鍵文字列の入力
+3. **Step 3**: 出力・文字列 (p1=1, p2=1) — 鍵を5回繰り返し（25文字 = [5,0,17,5,3]×5）
+4. **Step 4**: 出力・画像 (p1=1, p2=2) — **画像データ出力**
+5. **Step 5**: 停止 (p1=0, p2=0)
 
 ---
 
@@ -307,10 +311,32 @@ PXzn-wn-=20, ..., PXzn-wn-zPQ=24
 - 全28有効文字の単一・二重・三重文字を試行
 - **結果: 失敗** — 全ての非空有効入力に対して同一レスポンス
 
-### 画像（無限四分木）
-- ヒント: pair1(bool_b, NW, NE, SW, SE) = 5要素タプル
-- インタプリタは指定解像度まで木を掘り、そこの色を出力
-- 画像レンダリングコードは実装済みだが、正しい鍵がないため未使用
+### 鍵文字列の検証（成功）
+- **鍵: QfnQ& (コード [5,0,17,5,3])** — I/Oインタプリタで検証済み
+- 文字列構築: B_fst_val convention + reverse push order
+  - `make_pair(char_code, rest)` で pair_fst=value, pair_snd=rest
+  - `key_codes.iter().rev()` で逆順にプッシュ（最初の文字が最も外側）
+- 結果: Step 3で鍵を5回エコー、Step 4で画像出力(p2=2) → **"wrong"ではない = 正解**
+- 実行コマンド:
+```bash
+./ski_eval_rs/target/release/ski-eval.exe very_large_txt/stars_compact.txt \
+  --fuel 5000000000 --decode io --key 5,0,17,5,3 --img images/trykey --grid 64
+```
+
+### 画像レンダリング（進行中）
+- **画像データはdiamond構造（Church-encoded 5-tuple）**
+  - reference.mdより: `diamond = λabcdef. f a b c d e`
+  - `diamond(COND)(QA)(QB)(QC)(QD)` = `λf. f(COND)(QA)(QB)(QC)(QD)`
+  - QA=NW, QB=NE, QC=SW, QD=SE
+- **pair1のK/KIセレクタではOOMになる** — 余分な引数が互いに適用されてしまう
+- 正しい5引数セレクタ（検証済み）:
+  - sel_0 = `S(KK)(S(KK)(S(KK)(S(KK)(I))))` → COND
+  - sel_1 = `K(S(KK)(S(KK)(S(KK)(I))))` → QA (NW)
+  - sel_2 = `K(K(S(KK)(S(KK)(I))))` → QB (NE)
+  - sel_3 = `K(K(K(S(KK)(I))))` → QC (SW)
+  - sel_4 = `K(K(K(K(I))))` → QD (SE)
+- 抽出方法: `data(sel_i)` で i番目のフィールドを取得
+- **OOM問題**: アリーナが46GBまで膨張してクラッシュ → 容量制限が必要
 
 ---
 
@@ -337,7 +363,7 @@ PXzn-wn-=20, ..., PXzn-wn-zPQ=24
 - [x] **全文字コード対応の解明** — charcode_query.jsでサーバーに直接問い合わせて全28文字+負コード3文字を取得
 - [x] **質問文の完全解読** — `,lz-QPwnQu-wnz-kPX-MPz-P-zlWlQD-<` = "for navigation, what is current definition?"
 - [x] **ナビゲーター調査** — current definition = QfnQ& とサーバーが回答
-- [ ] **鍵文字列の検証** — QfnQ& (コード [5,0,17,5,3]) をRust評価器で検証
-- [ ] 正しい鍵で画像出力
-- [ ] 画像レンダリング
+- [x] **鍵文字列の検証** — QfnQ& (コード [5,0,17,5,3]) → **正解確認済み**（Step3で鍵エコー、Step4で画像出力）
+- [x] 正しい鍵で画像出力 — Step 4: p1=1, p2=2（画像データ取得成功）
+- [ ] **画像レンダリング** — diamond構造の正しい5引数セレクタで再試行中（OOM対策必要）
 - [ ] 最終回答導出
