@@ -3589,7 +3589,7 @@ fn main() {
                                 // Render at multiple depths per the hint-new-2 strategy
                                 // Depth 1-8: render at 2^(depth-1) resolution
                                 // Depth 9-25: zoom into center 1/2, render at 128x128
-                                let max_depth: usize = 25;
+                                let max_depth: usize = 25; // NOTE: may OOM at depth 16+
 
                                 // We track 4 quadrant roots for the current "virtual root"
                                 // For depth <= 8, we have a single root; for zoom we have 4 sub-roots

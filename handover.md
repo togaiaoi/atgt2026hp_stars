@@ -19,17 +19,24 @@
    - 4x4: depth 9-25 全て完了（全depthでパターンあり）
    - 8x8: depth 9-15 完了（depth 16でOOM — 中間depthのレンダリング汚染が原因）
 
-### 現在進行中: プログラム構造解析（独自デコードアプローチ）
-- GMヒント「デコードをプログラムの実行ではなく独自にやってしまう手もある」に基づく
-- item_09（301K、データチェーン内最大要素）がリスト構造（アリティ2）であることを確認
-- I/Oフローの画像データノードはChurch 5-tuple（アリティ1）で、item_09のノード+デコーダコードの混合遅延式
-- デコーダのアルゴリズム理解が次の課題
+### 完了: デコーダー（left_x）解析
+10. **left_x構造解明**: 153K charsの完全評価済みquadtree。7つのY-combinator再帰セクション
+   - COND(32%), NW(16%), NE(0.4%), SW(0.05%=座標反射), SE(51%=メイン)
+   - 末尾定数: `step(step(step(data, 2048), 256), 32)` で24段ズーム生成
+   - 各セクションが `result(0)(0)(0)(前セクション)(1)` でチェーン
+11. **演算子テスト**: arg0=等値系, arg1=XOR系, arg3=比較条件
+12. **elem[0-2]差分**: >99.97%共有、判別子(K/K(K(I))/I)と副フラグのみ異なる
+13. **ブルートフォース限界確認**: 8x8 depth16で1.4B nodes OOM、ネイティブ必須
+
+### 現在進行中: ネイティブデコーダー実装
+- codex推奨: SKI直訳せず、型付きIR（Bool/Num/Pair/Quad）へ変換
+- 画像はフラクタルではなくテーブル/ビットストリーム駆動のquadtreeデコーダ
+- 検証順: 4x4完全一致 → 8x8 → 128x128
 
 ### 残りのステップ
-1. **デコーダのアルゴリズム理解** — item_09(リスト)→四分木(Church 5-tuple)の変換ロジック
-2. **独自デコーダのRust実装** — SKI評価なしの高速デコード
-3. **128x128レンダリング** — 独自デコードまたはsnapshot/restoreアプローチ
-4. **最終回答を画像から読み取る**
+1. **ネイティブデコーダーのRust実装** — 型付きIRベースの高速デコード
+2. **128x128レンダリング** — 全17 depth (9-25) を128x128で
+3. **最終回答を画像から読み取る**
 
 ## 鍵検証の詳細
 
@@ -182,7 +189,11 @@ sel_4 = K(K(K(K(I))))                  → QD (SE) を抽出
 ## 主要ファイル
 | ファイル | 説明 |
 |---------|------|
-| `ski_eval_rs/src/main.rs` | Rust SKI評価器（~4500行） |
+| `ski_eval_rs/src/main.rs` | Rust SKI評価器（~5800行） |
+| `extracted/x_arg4.txt` | デコーダー関数（52K compact SKI + lambda decompile） |
+| `extracted/x_arg3.txt` | 比較/条件演算子（57 bytes） |
+| `extracted/left_x.txt` | left_x全体（61K compact SKI） |
+| `extracted/data_items/elem_*.txt` | item_09の各要素（elem0-2: ~301K, elem3-5: small） |
 | `very_large_txt/stars_compact.txt` | コンパクト形式のプログラム |
 | `CLAUDE.md` | 詳細な技術情報・仕様・確定事項 |
 | `reference/couldbewrong/reference.md` | プレイヤー解析（言語仕様・問題解答集） |
