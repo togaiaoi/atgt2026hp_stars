@@ -535,6 +535,168 @@ fn describe(arena: &Arena, idx: u32, depth: usize) -> String {
     }
 }
 
+/// Resolved combinator form — looks through APP chains to identify S1/S2/K1 etc.
+#[derive(Debug, Clone, Copy)]
+enum Resolved { RS, RK, RI, RK1(u32), RS1(u32), RS2(u32, u32), RApp(u32, u32), ROther(u8) }
+
+fn resolve(arena: &Arena, idx: u32) -> Resolved {
+    let idx = arena.follow(idx);
+    let n = &arena.nodes[idx as usize];
+    match n.tag {
+        S => Resolved::RS,
+        K => Resolved::RK,
+        I => Resolved::RI,
+        K1 => Resolved::RK1(n.a),
+        S1 => Resolved::RS1(n.a),
+        S2 => Resolved::RS2(n.a, n.b),
+        IND => resolve(arena, n.a),
+        APP => {
+            match resolve(arena, n.a) {
+                Resolved::RK => Resolved::RK1(n.b),
+                Resolved::RS => Resolved::RS1(n.b),
+                Resolved::RS1(f) => Resolved::RS2(f, n.b),
+                _ => Resolved::RApp(n.a, n.b),
+            }
+        }
+        _ => Resolved::ROther(n.tag),
+    }
+}
+
+/// Check if resolved S2(f,g) is pair2(a,b) = S2(K1(K), S2(S2(I, K1(a)), K1(b)))
+fn check_pair2_r(arena: &Arena, f: u32, g: u32) -> Option<(u32, u32)> {
+    // f should be K1(K)
+    if let Resolved::RK1(kk) = resolve(arena, f) {
+        if !matches!(resolve(arena, kk), Resolved::RK) { return None; }
+    } else { return None; }
+    // g should be S2(S2(I, K1(a)), K1(b))
+    if let Resolved::RS2(ga, gb) = resolve(arena, g) {
+        if let Resolved::RK1(val_b) = resolve(arena, gb) {
+            if let Resolved::RS2(gaa, gab) = resolve(arena, ga) {
+                if matches!(resolve(arena, gaa), Resolved::RI) {
+                    if let Resolved::RK1(val_a) = resolve(arena, gab) {
+                        return Some((val_a, val_b));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Check if idx is Y(f): APP(M, M) where M = S2(K1(f), S2(I, I)) = S(Kf)(SII)
+/// Returns Some(f_idx) if so.
+fn check_y_combinator(arena: &Arena, idx: u32) -> Option<u32> {
+    if let Resolved::RApp(lhs, rhs) = resolve(arena, idx) {
+        // Both sides should be S2(K1(f), S2(I, I))
+        if let Resolved::RS2(lf, lg) = resolve(arena, lhs) {
+            if let Resolved::RS2(rf, rg) = resolve(arena, rhs) {
+                // lg and rg should be S2(I, I) = SII = ω
+                if let Resolved::RS2(lga, lgb) = resolve(arena, lg) {
+                    if matches!(resolve(arena, lga), Resolved::RI) && matches!(resolve(arena, lgb), Resolved::RI) {
+                        if let Resolved::RS2(rga, rgb) = resolve(arena, rg) {
+                            if matches!(resolve(arena, rga), Resolved::RI) && matches!(resolve(arena, rgb), Resolved::RI) {
+                                // lf and rf should both be K1(f) with same f
+                                if let Resolved::RK1(lf_val) = resolve(arena, lf) {
+                                    if let Resolved::RK1(rf_val) = resolve(arena, rf) {
+                                        let lf_follow = arena.follow(lf_val);
+                                        let rf_follow = arena.follow(rf_val);
+                                        if lf_follow == rf_follow {
+                                            return Some(lf_follow);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Decompile SKI expression to readable lambda calculus using bracket abstraction inverse.
+fn decompile(arena: &Arena, idx: u32, depth: usize, vc: &mut usize) -> String {
+    if depth > 100 { return "«deep»".to_string(); }
+    // Check Y combinator first (before resolve, since it's an APP pattern)
+    if let Some(f) = check_y_combinator(arena, idx) {
+        let body = decompile(arena, f, depth + 1, vc);
+        return format!("Y({})", body);
+    }
+    match resolve(arena, idx) {
+        Resolved::RI => "I".to_string(),
+        Resolved::RK => "K".to_string(),
+        Resolved::RS => "S".to_string(),
+        Resolved::RK1(a) => {
+            // false = K1(I) = KI
+            if matches!(resolve(arena, a), Resolved::RI) {
+                return "false".to_string();
+            }
+            let v = format!("_{}", *vc); *vc += 1;
+            let body = decompile(arena, a, depth + 1, vc);
+            format!("λ{}.{}", v, body)
+        }
+        Resolved::RS2(f, g) => {
+            // true = S2(K1(K), I) = S(KK)(I)
+            if matches!(resolve(arena, g), Resolved::RI) {
+                if let Resolved::RK1(kk) = resolve(arena, f) {
+                    if matches!(resolve(arena, kk), Resolved::RK) {
+                        return "true".to_string();
+                    }
+                }
+            }
+            // pair2(a,b) = S2(K1(K), S2(S2(I, K1(a)), K1(b)))
+            if let Some((va, vb)) = check_pair2_r(arena, f, g) {
+                let sa = decompile(arena, va, depth + 1, vc);
+                let sb = decompile(arena, vb, depth + 1, vc);
+                return format!("cons({}, {})", sa, sb);
+            }
+            let v = format!("x{}", *vc); *vc += 1;
+            let body = deabs(arena, f, g, &v, depth + 1, vc);
+            format!("λ{}.{}", v, body)
+        }
+        Resolved::RS1(f) => {
+            let vg = format!("g{}", *vc); *vc += 1;
+            let vx = format!("x{}", *vc); *vc += 1;
+            let f_body = deabs_single(arena, f, &vx, depth + 1, vc);
+            format!("λ{}.λ{}.({} ({} {}))", vg, vx, f_body, vg, vx)
+        }
+        Resolved::RApp(f, a) => {
+            let func = decompile(arena, f, depth + 1, vc);
+            let arg = decompile(arena, a, depth + 1, vc);
+            format!("({} {})", func, arg)
+        }
+        Resolved::ROther(t) => format!("?{}", t),
+    }
+}
+
+/// Inverse bracket abstraction for S2(f, g): body = (deabs_single f var)(deabs_single g var)
+fn deabs(arena: &Arena, f: u32, g: u32, var: &str, depth: usize, vc: &mut usize) -> String {
+    let e1 = deabs_single(arena, f, var, depth, vc);
+    let e2 = deabs_single(arena, g, var, depth, vc);
+    format!("({} {})", e1, e2)
+}
+
+/// Inverse bracket abstraction on a single node
+fn deabs_single(arena: &Arena, idx: u32, var: &str, depth: usize, vc: &mut usize) -> String {
+    if depth > 100 { return "«deep»".to_string(); }
+    match resolve(arena, idx) {
+        Resolved::RI => var.to_string(),
+        Resolved::RK1(a) => decompile(arena, a, depth + 1, vc),
+        Resolved::RS2(f, g) => {
+            let e1 = deabs_single(arena, f, var, depth + 1, vc);
+            let e2 = deabs_single(arena, g, var, depth + 1, vc);
+            format!("({} {})", e1, e2)
+        }
+        Resolved::RS1(f) => {
+            let body = deabs_single(arena, f, var, depth + 1, vc);
+            format!("(S {})", body)
+        }
+        // Anything else is a constant (doesn't use the bound variable)
+        _ => decompile(arena, idx, depth + 1, vc),
+    }
+}
+
 /// Decode a list of Scott-encoded numbers.
 /// Uses 2-arg Scott pair extraction.
 fn decode_number_list(arena: &mut Arena, node: u32, fuel: u64, max_items: usize) -> Vec<u64> {
@@ -660,8 +822,10 @@ fn main() {
     eprintln!("  {} bytes", input_len);
 
     // Pre-allocate arena.
-    let estimated_nodes = if decode_mode == "analyze" {
-        50_000_000usize  // 50M × 12B = 600MB (enough for I/O + analysis)
+    let estimated_nodes = if decode_mode == "walk-item09" || decode_mode == "test-item09" || decode_mode == "test-selfapp" || decode_mode == "decompile" {
+        50_000_000usize  // 50M × 12B = 600MB (small files)
+    } else if decode_mode == "examine-image" || decode_mode == "analyze" {
+        200_000_000usize  // 200M × 12B = 2.4GB (I/O flow + analysis)
     } else {
         1_500_000_000usize  // 1.5B × 12B = 18GB (for full rendering)
     };
@@ -2607,7 +2771,7 @@ fn main() {
                 write_pgm(&fname, sz, sz, &pix);
             }
         }
-        "io" | "analyze" | "trace-image" => {
+        "io" | "analyze" | "trace-image" | "examine-image" => {
             // I/O interpreter based on hint-new.md
             // Output = (tuple (tuple p1 p2) Q) = pair1(pair1(p1, p2), Q)
             // p1, p2 are Church-encoded numbers
@@ -3140,14 +3304,115 @@ fn main() {
                                 eprintln!("  Arena nodes: {}", arena.nodes.len());
 
                                 // === DIAGNOSTIC: Trace image data node structure ===
-                                if decode_mode == "trace-image" || decode_mode == "examine" {
+                                if decode_mode == "trace-image" || decode_mode == "examine" || decode_mode == "examine-image" {
                                     let data_f = arena.follow(data);
                                     let dn = arena.nodes[data_f as usize];
                                     let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
                                     eprintln!("\n=== IMAGE DATA NODE TRACE ===");
                                     eprintln!("  data idx={} tag={} a={} b={}",
                                         data_f, tag_names[dn.tag as usize], dn.a, dn.b);
-                                    eprintln!("  describe(3): {}", &describe(&arena, data_f, 3));
+                                    eprintln!("  describe(5): {}", &describe(&arena, data_f, 5));
+                                    eprintln!("  stars_compact range: 0..{}", 30485221);
+                                    eprintln!("  total arena nodes: {}", arena.nodes.len());
+
+                                    // Walk the graph from data node to find referenced indices
+                                    {
+                                        let mut visited = std::collections::HashSet::new();
+                                        let mut queue = std::collections::VecDeque::new();
+                                        queue.push_back((data_f, 0u32));
+                                        let mut min_idx = data_f;
+                                        let mut max_idx = data_f;
+                                        let mut tag_counts = [0u64; 8]; // APP,S,K,I,S1,S2,K1,IND
+                                        let mut depth_counts = std::collections::HashMap::new();
+                                        let max_walk = 50000u32;
+                                        while let Some((idx, depth)) = queue.pop_front() {
+                                            if visited.len() >= max_walk as usize { break; }
+                                            if depth > 30 { continue; }
+                                            if visited.contains(&idx) { continue; }
+                                            visited.insert(idx);
+                                            let n = arena.nodes[idx as usize];
+                                            if (n.tag as usize) < 8 {
+                                                tag_counts[n.tag as usize] += 1;
+                                            }
+                                            *depth_counts.entry(depth).or_insert(0u64) += 1;
+                                            if idx < min_idx { min_idx = idx; }
+                                            if idx > max_idx { max_idx = idx; }
+                                            // Follow children for APP, S1, S2, K1, IND
+                                            match n.tag {
+                                                0 | 4 | 5 | 6 => { // APP, S1, S2, K1
+                                                    queue.push_back((n.a, depth + 1));
+                                                    queue.push_back((n.b, depth + 1));
+                                                }
+                                                7 => { // IND
+                                                    queue.push_back((n.a, depth));
+                                                }
+                                                _ => {} // S, K, I are leaves
+                                            }
+                                        }
+                                        eprintln!("  Graph walk (max {}): {} unique nodes", max_walk, visited.len());
+                                        eprintln!("    idx range: {} .. {}", min_idx, max_idx);
+                                        eprintln!("    tags: APP={} S={} K={} I={} S1={} S2={} K1={} IND={}",
+                                            tag_counts[0], tag_counts[1], tag_counts[2], tag_counts[3],
+                                            tag_counts[4], tag_counts[5], tag_counts[6], tag_counts[7]);
+                                        let mut depths: Vec<_> = depth_counts.iter().collect();
+                                        depths.sort_by_key(|&(&d, _)| d);
+                                        for (d, count) in depths.iter().take(15) {
+                                            eprint!("    depth {}: {}  ", d, count);
+                                        }
+                                        eprintln!();
+                                    }
+
+                                    // Analyze S(F)(G) structure of image data
+                                    {
+                                        let data_n = arena.nodes[data_f as usize];
+                                        // data_f should be APP node (S2 form after whnf)
+                                        // Check if it's S(F)(G) pattern
+                                        // S2 has tag=5, a=F captured arg, b=G second arg
+                                        // Or it might be APP(S1(F), G)
+                                        let left_idx = data_n.a;
+                                        let right_idx = data_n.b;
+                                        let left_n = arena.nodes[left_idx as usize];
+                                        let right_n = arena.nodes[right_idx as usize];
+                                        eprintln!("\n  --- S(F)(G) structure ---");
+                                        eprintln!("  Left (F-side) idx={} tag={}", left_idx,
+                                            tag_names[left_n.tag as usize]);
+                                        eprintln!("  Right (G-side) idx={} tag={}", right_idx,
+                                            tag_names[right_n.tag as usize]);
+
+                                        // Walk left and right subtrees separately
+                                        for (name, root) in [("Left(F)", left_idx), ("Right(G)", right_idx)] {
+                                            let mut visited = std::collections::HashSet::new();
+                                            let mut queue = std::collections::VecDeque::new();
+                                            queue.push_back(root);
+                                            let max_walk = 30000u32;
+                                            let mut in_item09 = 0u32; // nodes in item_09 range
+                                            let mut in_code = 0u32; // nodes < item_09 range
+                                            let mut in_new = 0u32; // nodes > stars_compact range
+                                            while let Some(idx) = queue.pop_front() {
+                                                if visited.len() >= max_walk as usize { break; }
+                                                if visited.contains(&idx) { continue; }
+                                                visited.insert(idx);
+                                                let n = arena.nodes[idx as usize];
+                                                if idx >= 30182741 && idx <= 30484357 {
+                                                    in_item09 += 1;
+                                                } else if idx < 30485221 {
+                                                    in_code += 1;
+                                                } else {
+                                                    in_new += 1;
+                                                }
+                                                match n.tag {
+                                                    0 | 4 | 5 | 6 => {
+                                                        queue.push_back(n.a);
+                                                        queue.push_back(n.b);
+                                                    }
+                                                    7 => { queue.push_back(n.a); }
+                                                    _ => {}
+                                                }
+                                            }
+                                            eprintln!("  {} walk ({} nodes): item09={} code={} new={}",
+                                                name, visited.len(), in_item09, in_code, in_new);
+                                        }
+                                    }
 
                                     // Apply sel_0..4 and measure fuel/step count
                                     let trace_sels: [u32; 5] = [
@@ -3215,7 +3480,60 @@ fn main() {
                                     if decode_mode == "trace-image" {
                                         break; // Stop after trace
                                     }
-                                    // For examine, also do GC to reclaim trace garbage
+                                    if decode_mode == "examine-image" {
+                                        // Decompile image data structure at various levels
+                                        eprintln!("\n=== DECOMPILE IMAGE DATA ===");
+
+                                        // Decompile root data node (before sel application)
+                                        let mut vc = 0usize;
+                                        let root_decomp = decompile(&arena, data_f, 0, &mut vc);
+                                        eprintln!("Root data decompile ({} chars):", root_decomp.len());
+                                        eprintln!("{}", if root_decomp.len() > 2000 { &root_decomp[..2000] } else { &root_decomp });
+
+                                        // Decompile COND (sel_0 result)
+                                        vc = 0;
+                                        let cond_decomp = decompile(&arena, children[0], 0, &mut vc);
+                                        eprintln!("\nCOND decompile ({} chars):", cond_decomp.len());
+                                        eprintln!("{}", if cond_decomp.len() > 2000 { &cond_decomp[..2000] } else { &cond_decomp });
+
+                                        // Decompile NW child (sel_1 result)
+                                        vc = 0;
+                                        let nw_decomp = decompile(&arena, children[1], 0, &mut vc);
+                                        eprintln!("\nNW decompile ({} chars):", nw_decomp.len());
+                                        eprintln!("{}", if nw_decomp.len() > 2000 { &nw_decomp[..2000] } else { &nw_decomp });
+
+                                        // Get NW.COND (level 2)
+                                        let nw_cond_app = arena.alloc(APP, children[1], trace_sels[0]);
+                                        let mut f_nwc = 500_000_000u64;
+                                        arena.whnf(nw_cond_app, &mut f_nwc);
+                                        let nw_cond = arena.follow(nw_cond_app);
+                                        vc = 0;
+                                        let nw_cond_decomp = decompile(&arena, nw_cond, 0, &mut vc);
+                                        eprintln!("\nNW.COND decompile ({} chars):", nw_cond_decomp.len());
+                                        eprintln!("{}", if nw_cond_decomp.len() > 2000 { &nw_cond_decomp[..2000] } else { &nw_cond_decomp });
+
+                                        // Check: are NW, NE, SW, SE structurally similar?
+                                        for i in 1..5 {
+                                            vc = 0;
+                                            let decomp = decompile(&arena, children[i], 0, &mut vc);
+                                            eprintln!("{} decompile length: {} chars, resolved: {:?}",
+                                                sel_names[i], decomp.len(), resolve(&arena, children[i]));
+                                        }
+
+                                        // Write full decompilations to files
+                                        for i in 0..5 {
+                                            vc = 0;
+                                            let decomp = decompile(&arena, children[i], 0, &mut vc);
+                                            let path = format!("{}_examine_{}.txt", img_path, sel_names[i]);
+                                            std::fs::write(&path, &decomp).ok();
+                                            eprintln!("Wrote {} ({} chars) to {}", sel_names[i], decomp.len(), path);
+                                        }
+
+                                        eprintln!("\nArena after examine: {}", arena.nodes.len());
+                                        eprintln!("=== END EXAMINE ===");
+                                        break;
+                                    }
+                                    // For other modes, do GC to reclaim trace garbage
                                     let mut gc_roots = vec![data];
                                     let (total, live, freed) = arena.gc(&gc_roots);
                                     eprintln!("  Post-trace GC: total={} live={} freed={}", total, live, freed);
@@ -3443,21 +3761,10 @@ fn main() {
                                         total, live, freed, arena.free_list.len());
                                 }
 
-                                // Render target size: 128x128 via 16x16 grid of 8x8 tiles
-                                let render_sz: usize = 128;
+                                // Render target size: configurable via --grid (default 128)
+                                let render_sz: usize = if grid_size > 0 { grid_size as usize } else { 128 };
                                 let tile_sz: usize = 8;
-                                let tiles_per_side = render_sz / tile_sz; // 16
-                                // Number of quadtree levels from zoom root to tile sub-root
-                                let tile_nav_depth: usize = (tiles_per_side as f64).log2() as usize; // 4
-                                // Number of quadtree levels within each tile
-                                let tile_inner_depth: usize = ((tile_sz / 2) as f64).log2() as usize; // 1 (8x8 → half=4, depth=2... let's compute correctly)
-
-                                // For 128x128: we need 7 levels of quadtree navigation total
-                                //   - The zoom root gives us 4 quadrants (TL/TR/BL/BR) = top level
-                                //   - Each 8x8 tile needs render_shared with its own sub-roots
-                                //   - Tile position (tile_row, tile_col) in 0..16 determines 4 extra levels of navigation
-                                //     from the zoom quadrant down to the tile's sub-root
-                                // Actually: 128x128 means half=64, so depth_within = log2(64) = 6 levels
+                                eprintln!("  Render size: {}x{}, tile_sz={}", render_sz, render_sz, tile_sz);
                                 // The zoom root already splits into 4 quadrants (1 level)
                                 // So from each quadrant we need 6 more levels of navigation
                                 // = 4 levels to reach the 8x8 tile's sub-root + 2 levels within the tile (render_shared handles this)
@@ -3486,11 +3793,28 @@ fn main() {
                                             total, live, freed, arena.free_list.len());
                                     }
 
-                                    // --- SNAPSHOT/RESTORE TILE RENDERING ---
-                                    // Take a snapshot of the arena after zoom+GC.
-                                    // For each 8x8 tile, restore snapshot, navigate to tile sub-root, render.
-                                    // Snapshot: clone arena state for tile-by-tile restore
-                                    // Use Box<[Node]> to avoid Vec doubling overhead
+                                    // Skip rendering if output file already exists
+                                    let check_fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, render_sz, render_sz);
+                                    if std::path::Path::new(&check_fname).exists() {
+                                        eprintln!("    SKIP depth {} (file exists: {})", depth, check_fname);
+                                        continue;
+                                    }
+
+                                    let full_image;
+
+                                    if render_sz <= tile_sz {
+                                        // --- SMALL RENDER: direct render_shared, no tiling ---
+                                        eprintln!("    Direct render (no tiling): {}x{}", render_sz, render_sz);
+                                        let pix = render_shared(
+                                            &mut arena,
+                                            [zoom_tl, zoom_tr, zoom_bl, zoom_br],
+                                            render_sz, &sels, eval_fuel,
+                                            &[zoom_tl, zoom_tr, zoom_bl, zoom_br],
+                                            1_900_000_000
+                                        );
+                                        full_image = pix;
+                                    } else {
+                                    // --- TILED RENDERING with snapshot/restore ---
                                     let snapshot_nodes: Box<[Node]> = arena.nodes.clone().into_boxed_slice();
                                     let snapshot_free_list: Box<[u32]> = arena.free_list.clone().into_boxed_slice();
                                     let snapshot_zoom = [zoom_tl, zoom_tr, zoom_bl, zoom_br];
@@ -3499,23 +3823,18 @@ fn main() {
                                     eprintln!("    Snapshot taken: {} nodes ({:.1} MB)",
                                         snapshot_len, snapshot_len as f64 * 12.0 / 1_000_000.0);
 
-                                    let mut full_image = vec![0u8; render_sz * render_sz];
+                                    let mut img = vec![0u8; render_sz * render_sz];
 
-                                    // 128x128 = 4 quadrants of 64x64 each
-                                    // Each quadrant is zoom_tl/tr/bl/br
-                                    // Within each 64x64 quadrant, we have 8x8 tiles at positions (tr, tc) in 0..8
-                                    // Navigation: 3 levels from quadrant root to 8x8 tile sub-root
-                                    //   level 0: 64x64 → 32x32 (select NW/NE/SW/SE)
-                                    //   level 1: 32x32 → 16x16
-                                    //   level 2: 16x16 → 8x8 (this is the tile to render)
-                                    // Then render_shared handles the 8x8 (half=4, 2 more levels within)
-
-                                    let quadrant_sz = render_sz / 2; // 64
-                                    let tiles_per_quadrant = quadrant_sz / tile_sz; // 8
-                                    let nav_levels = 3usize; // 64→32→16→8
+                                    let quadrant_sz = render_sz / 2;
+                                    let tiles_per_quadrant = quadrant_sz / tile_sz;
+                                    let nav_levels = if tiles_per_quadrant > 1 {
+                                        (tiles_per_quadrant as f64).log2() as usize
+                                    } else { 0 };
 
                                     let mut tile_count = 0usize;
-                                    let total_tiles = (render_sz / tile_sz) * (render_sz / tile_sz); // 256
+                                    let total_tiles = (render_sz / tile_sz) * (render_sz / tile_sz);
+                                    eprintln!("    Tiles: {} ({}x{} per quadrant, nav_levels={})",
+                                        total_tiles, tiles_per_quadrant, tiles_per_quadrant, nav_levels);
 
                                     for qi in 0..4usize {
                                         let q_row_off = if qi >= 2 { quadrant_sz } else { 0 };
@@ -3523,7 +3842,7 @@ fn main() {
 
                                         for tr in 0..tiles_per_quadrant {
                                             for tc in 0..tiles_per_quadrant {
-                                                // Restore snapshot: truncate + copy in-place (no reallocation)
+                                                // Restore snapshot
                                                 arena.nodes.truncate(snapshot_len);
                                                 arena.nodes[..snapshot_len].copy_from_slice(&snapshot_nodes);
                                                 arena.free_list.clear();
@@ -3534,15 +3853,11 @@ fn main() {
                                                 let zoom_roots = snapshot_zoom;
                                                 let q_root = zoom_roots[qi];
 
-                                                // Navigate nav_levels down to the 8x8 tile sub-root
-                                                // At each level, determine which quadrant (1=TL,2=TR,3=BL,4=BR)
                                                 let mut node = q_root;
-                                                let mut local_row = tr * tile_sz; // pixel row within 64x64 quadrant
+                                                let mut local_row = tr * tile_sz;
                                                 let mut local_col = tc * tile_sz;
                                                 let mut local_size = quadrant_sz;
 
-                                                // Extract 4 sub-roots for the tile by navigating nav_levels
-                                                // After nav_levels steps, node is at an 8x8 sub-tree
                                                 for _nav in 0..nav_levels {
                                                     let lh = local_size / 2;
                                                     let child_idx = if local_row < lh {
@@ -3559,8 +3874,6 @@ fn main() {
                                                     local_size = lh;
                                                 }
 
-                                                // Now `node` is at the 8x8 sub-tree root (a diamond node)
-                                                // Extract its 4 children for render_shared
                                                 let tile_tl = {
                                                     let app = arena.alloc(APP, node, snapshot_sels[1]);
                                                     let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
@@ -3578,7 +3891,6 @@ fn main() {
                                                     let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
                                                 };
 
-                                                // Render 8x8 tile using shared lazy evaluation
                                                 let pix = render_shared(
                                                     &mut arena,
                                                     [tile_tl, tile_tr, tile_bl, tile_br],
@@ -3587,36 +3899,26 @@ fn main() {
                                                     1_900_000_000
                                                 );
 
-                                                // Copy tile pixels into full image
                                                 let img_row_off = q_row_off + tr * tile_sz;
                                                 let img_col_off = q_col_off + tc * tile_sz;
                                                 for py in 0..tile_sz {
                                                     for px in 0..tile_sz {
-                                                        full_image[(img_row_off + py) * render_sz + (img_col_off + px)]
+                                                        img[(img_row_off + py) * render_sz + (img_col_off + px)]
                                                             = pix[py * tile_sz + px];
                                                     }
                                                 }
 
                                                 tile_count += 1;
-                                                if tile_count % 16 == 0 || tile_count == total_tiles {
-                                                    let bc = full_image.iter().filter(|&&p| p == 0).count();
-                                                    let wc = full_image.iter().filter(|&&p| p == 255).count();
-                                                    let gc = full_image.iter().filter(|&&p| p == 128).count();
+                                                if tile_count % 4 == 0 || tile_count == total_tiles {
+                                                    let bc = img.iter().filter(|&&p| p == 0).count();
+                                                    let wc = img.iter().filter(|&&p| p == 255).count();
+                                                    let gc = img.iter().filter(|&&p| p == 128).count();
                                                     eprintln!("    Tile {}/{}: arena_peak={} B={} W={} G={}",
                                                         tile_count, total_tiles, arena.nodes.len(), bc, wc, gc);
                                                 }
                                             }
                                         }
                                     }
-
-                                    // Save the 128x128 image
-                                    let bc = full_image.iter().filter(|&&p| p == 0).count();
-                                    let wc = full_image.iter().filter(|&&p| p == 255).count();
-                                    let gc_count = full_image.iter().filter(|&&p| p == 128).count();
-                                    eprintln!("    Depth {} done: black={}, white={}, gray={}", depth, bc, wc, gc_count);
-                                    let fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, render_sz, render_sz);
-                                    write_pgm(&fname, render_sz, render_sz, &full_image);
-                                    eprintln!("    Saved: {}", fname);
 
                                     // Restore snapshot for next depth's zoom step
                                     arena.nodes.truncate(snapshot_len);
@@ -3625,6 +3927,17 @@ fn main() {
                                     arena.free_list.extend_from_slice(&snapshot_free_list);
                                     arena.checkpoint = None;
                                     arena.saved_nodes.clear();
+
+                                    full_image = img;
+                                    } // end tiled rendering
+
+                                    let bc = full_image.iter().filter(|&&p| p == 0).count();
+                                    let wc = full_image.iter().filter(|&&p| p == 255).count();
+                                    let gc_count = full_image.iter().filter(|&&p| p == 128).count();
+                                    eprintln!("    Depth {} done: {}x{} black={}, white={}, gray={}", depth, render_sz, render_sz, bc, wc, gc_count);
+                                    let fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, render_sz, render_sz);
+                                    write_pgm(&fname, render_sz, render_sz, &full_image);
+                                    eprintln!("    Saved: {}", fname);
                                 }
                             }
                             _ => {
@@ -3901,86 +4214,625 @@ fn main() {
             }
         }
         "test-item09" => {
-            // Load item_09 directly and test if it's a Church 5-tuple
+            // Load item_09 directly and comprehensively test its structure
             let item09_path = "extracted/data_items/item_09.txt";
             eprintln!("Loading {}...", item09_path);
             let item09_data = fs::read(item09_path).expect("Failed to read item_09.txt");
             eprintln!("  {} bytes", item09_data.len());
 
             let item09_root = parse_compact(&mut arena, &item09_data);
-            eprintln!("  Parsed: root={} arena={}", item09_root, arena.nodes.len());
-            eprintln!("  describe(3): {}", &describe(&arena, item09_root, 3));
+            let base_size = arena.nodes.len();
+            eprintln!("  Parsed: root={} arena={}", item09_root, base_size);
+            eprintln!("  describe(4): {}", &describe(&arena, item09_root, 4));
 
-            // Try applying diamond selectors
-            let sels: [u32; 5] = [
-                build_diamond_sel(&mut arena, 0),
-                build_diamond_sel(&mut arena, 1),
-                build_diamond_sel(&mut arena, 2),
-                build_diamond_sel(&mut arena, 3),
-                build_diamond_sel(&mut arena, 4),
-            ];
-            let sel_names = ["COND", "NW", "NE", "SW", "SE"];
+            let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
 
-            for i in 0..5 {
-                let arena_before = arena.nodes.len();
-                let app = arena.alloc(APP, item09_root, sels[i]);
+            // === Test 1: Is item_09 a list? (arity 2, pair_fst/pair_snd extraction) ===
+            eprintln!("\n=== Test 1: List decomposition (pair2) ===");
+            {
+                // Walk the list, extracting elements
+                let mut current = item09_root;
+                for elem_idx in 0..5 {
+                    arena.set_checkpoint();
+
+                    // pair_snd = value of this cons cell
+                    let mut f_snd = 500_000_000u64;
+                    let f_snd_before = f_snd;
+                    let snd = pair_snd(&mut arena, current, &mut f_snd);
+                    let snd_follow = arena.follow(snd);
+                    let snd_steps = f_snd_before - f_snd;
+                    let snd_tag = arena.nodes[snd_follow as usize].tag;
+                    eprintln!("  elem[{}] value: tag={} steps={} describe(3): {}",
+                        elem_idx, tag_names[snd_tag as usize], snd_steps,
+                        &describe(&arena, snd_follow, 3));
+
+                    // Try to decode value as bool
+                    let vbool = decode_bool(&mut arena, snd_follow, 10_000_000);
+                    eprintln!("    as bool: {:?}", vbool);
+
+                    // Try to decode value as Church 5-tuple by applying sel_0
+                    let sel0 = build_diamond_sel(&mut arena, 0);
+                    let app_sel = arena.alloc(APP, snd_follow, sel0);
+                    let mut f_sel = 100_000_000u64;
+                    let f_sel_before = f_sel;
+                    arena.whnf(app_sel, &mut f_sel);
+                    let sel_result = arena.follow(app_sel);
+                    let sel_steps = f_sel_before - f_sel;
+                    let sel_tag = arena.nodes[sel_result as usize].tag;
+                    eprintln!("    value(sel_0): tag={} steps={} describe(2): {}",
+                        tag_names[sel_tag as usize], sel_steps,
+                        &describe(&arena, sel_result, 2));
+                    if sel_steps > 0 {
+                        let cond_bool = decode_bool(&mut arena, sel_result, 10_000_000);
+                        eprintln!("    value(sel_0) as bool: {:?}", cond_bool);
+                    }
+
+                    arena.restore_checkpoint();
+
+                    // pair_fst = rest of the list (for next iteration)
+                    arena.set_checkpoint();
+                    let mut f_fst = 500_000_000u64;
+                    let f_fst_before = f_fst;
+                    let fst = pair_fst(&mut arena, current, &mut f_fst);
+                    let fst_follow = arena.follow(fst);
+                    let fst_steps = f_fst_before - f_fst;
+                    let fst_tag = arena.nodes[fst_follow as usize].tag;
+                    eprintln!("  elem[{}] rest: tag={} steps={} describe(2): {}",
+                        elem_idx, tag_names[fst_tag as usize], fst_steps,
+                        &describe(&arena, fst_follow, 2));
+
+                    // Check if rest is nil (KI = false)
+                    let rest_bool = decode_bool(&mut arena, fst_follow, 10_000_000);
+                    eprintln!("    rest as bool: {:?}", rest_bool);
+
+                    // If rest is false (nil), we've reached the end of the list
+                    if rest_bool == Some(false) {
+                        eprintln!("  -> End of list at elem[{}]", elem_idx);
+                        arena.restore_checkpoint();
+                        break;
+                    }
+
+                    // The rest becomes current for the next iteration
+                    // But we need to preserve it across checkpoint restore
+                    // Since we're in checkpoint mode, fst_follow points to new nodes
+                    // We can't use it after restore. Instead, re-extract in a fresh context.
+                    arena.restore_checkpoint();
+
+                    // Re-extract pair_fst without checkpoint to get persistent result
+                    let mut f_fst2 = 500_000_000u64;
+                    let fst2 = pair_fst(&mut arena, current, &mut f_fst2);
+                    current = arena.follow(fst2);
+                    eprintln!("  -> continuing with rest node {}", current);
+                }
+            }
+
+            // === Test 2: Try item_09 as a raw function with various arguments ===
+            eprintln!("\n=== Test 2: Apply item_09 to various arguments ===");
+            {
+                // item_09(true)(nil) — apply true then nil
+                arena.set_checkpoint();
+                let t = make_true(&mut arena);
+                let nil = make_false(&mut arena);
+                let app1 = arena.alloc(APP, item09_root, t);
+                let app2 = arena.alloc(APP, app1, nil);
+                let mut f = 200_000_000u64;
+                let f_before = f;
+                arena.whnf(app2, &mut f);
+                let result = arena.follow(app2);
+                let steps = f_before - f;
+                eprintln!("  item09(true)(nil): tag={} steps={} describe(3): {}",
+                    tag_names[arena.nodes[result as usize].tag as usize], steps,
+                    &describe(&arena, result, 3));
+                let rbool = decode_bool(&mut arena, result, 10_000_000);
+                eprintln!("    as bool: {:?}", rbool);
+                arena.restore_checkpoint();
+
+                // item_09(false)(nil)
+                arena.set_checkpoint();
+                let f_node = make_false(&mut arena);
+                let nil2 = make_false(&mut arena);
+                let app1b = arena.alloc(APP, item09_root, f_node);
+                let app2b = arena.alloc(APP, app1b, nil2);
+                let mut f = 200_000_000u64;
+                let f_before = f;
+                arena.whnf(app2b, &mut f);
+                let result2 = arena.follow(app2b);
+                let steps2 = f_before - f;
+                eprintln!("  item09(false)(nil): tag={} steps={} describe(3): {}",
+                    tag_names[arena.nodes[result2 as usize].tag as usize], steps2,
+                    &describe(&arena, result2, 3));
+                let rbool2 = decode_bool(&mut arena, result2, 10_000_000);
+                eprintln!("    as bool: {:?}", rbool2);
+                arena.restore_checkpoint();
+
+                // item_09(I)(I) — apply identity twice
+                arena.set_checkpoint();
+                let i1 = arena.alloc(I, NIL, NIL);
+                let i2 = arena.alloc(I, NIL, NIL);
+                let app1c = arena.alloc(APP, item09_root, i1);
+                let app2c = arena.alloc(APP, app1c, i2);
+                let mut f = 200_000_000u64;
+                let f_before = f;
+                arena.whnf(app2c, &mut f);
+                let result3 = arena.follow(app2c);
+                let steps3 = f_before - f;
+                eprintln!("  item09(I)(I): tag={} steps={} describe(3): {}",
+                    tag_names[arena.nodes[result3 as usize].tag as usize], steps3,
+                    &describe(&arena, result3, 3));
+                arena.restore_checkpoint();
+            }
+
+            // === Test 3: Apply sel_0 to item_09 with 2nd arg ===
+            eprintln!("\n=== Test 3: item_09(sel)(arg) ===");
+            {
+                let sels: [u32; 5] = [
+                    build_diamond_sel(&mut arena, 0),
+                    build_diamond_sel(&mut arena, 1),
+                    build_diamond_sel(&mut arena, 2),
+                    build_diamond_sel(&mut arena, 3),
+                    build_diamond_sel(&mut arena, 4),
+                ];
+                let sel_names = ["sel_0(COND)", "sel_1(NW)", "sel_2(NE)", "sel_3(SW)", "sel_4(SE)"];
+
+                for i in 0..5 {
+                    arena.set_checkpoint();
+                    let nil = make_false(&mut arena);
+                    let app1 = arena.alloc(APP, item09_root, sels[i]);
+                    let app2 = arena.alloc(APP, app1, nil);
+                    let mut f = 200_000_000u64;
+                    let f_before = f;
+                    arena.whnf(app2, &mut f);
+                    let result = arena.follow(app2);
+                    let steps = f_before - f;
+                    eprintln!("  item09({})(nil): tag={} steps={} describe(2): {}",
+                        sel_names[i],
+                        tag_names[arena.nodes[result as usize].tag as usize], steps,
+                        &describe(&arena, result, 2));
+                    if steps > 0 {
+                        let rbool = decode_bool(&mut arena, result, 10_000_000);
+                        eprintln!("    as bool: {:?}", rbool);
+                    }
+                    arena.restore_checkpoint();
+                }
+            }
+
+            // === Test 4: Check if item_09 is a 5-tuple by applying it to 5 args ===
+            eprintln!("\n=== Test 4: Apply item_09 to 5 arguments (Church 5-tuple test) ===");
+            {
+                arena.set_checkpoint();
+                // Church 5-tuple: (λf. f a b c d e)(sel) = sel a b c d e
+                // Build marker arguments to detect which gets returned
+                let markers: Vec<u32> = (0..5).map(|i| {
+                    // Use unique combinator-like markers
+                    // marker_i = K^i(S) — unique identifiable patterns
+                    let s = arena.alloc(S, NIL, NIL);
+                    let mut m = s;
+                    for _ in 0..i {
+                        let k = arena.alloc(K, NIL, NIL);
+                        m = arena.alloc(APP, k, m);
+                    }
+                    m
+                }).collect();
+
+                // item_09(marker_0)(marker_1)(marker_2)(marker_3)(marker_4)
+                let mut app = arena.alloc(APP, item09_root, markers[0]);
+                for i in 1..5 {
+                    app = arena.alloc(APP, app, markers[i]);
+                }
                 let mut f = 500_000_000u64;
                 let f_before = f;
                 arena.whnf(app, &mut f);
                 let result = arena.follow(app);
                 let steps = f_before - f;
-                let new_nodes = arena.nodes.len() - arena_before;
-                let rn = arena.nodes[result as usize];
-                let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
-                eprintln!("  sel_{} ({}): {} steps, {} new nodes, result tag={}",
-                    i, sel_names[i], steps, new_nodes, tag_names[rn.tag as usize]);
-                eprintln!("    describe(3): {}", &describe(&arena, result, 3));
-                if i == 0 {
-                    let b = decode_bool(&mut arena, result, 5_000_000);
-                    eprintln!("    COND as bool: {:?}", b);
+                eprintln!("  item09(m0)(m1)(m2)(m3)(m4): tag={} steps={} describe(4): {}",
+                    tag_names[arena.nodes[result as usize].tag as usize], steps,
+                    &describe(&arena, result, 4));
+                arena.restore_checkpoint();
+            }
+
+            // === Test 5: Full I/O image data vs item_09 comparison ===
+            // Compare the actual image quadtree node (from I/O flow) with item_09
+            eprintln!("\n=== Test 5: What tag does root node have? Check deeply ===");
+            {
+                let rn = arena.nodes[item09_root as usize];
+                eprintln!("  Root tag: {}", tag_names[rn.tag as usize]);
+                if rn.tag == APP || rn.tag == 4 { // APP or S1
+                    let a = rn.a;
+                    let b = rn.b;
+                    let an = arena.nodes[a as usize];
+                    let bn = arena.nodes[b as usize];
+                    eprintln!("  Root.a tag: {} (.a={}, .b={})", tag_names[an.tag as usize], an.a, an.b);
+                    eprintln!("  Root.b tag: {} (.a={}, .b={})", tag_names[bn.tag as usize], bn.a, bn.b);
+
+                    // Go one level deeper on .a
+                    if an.tag == APP || an.tag == 4 || an.tag == 5 {
+                        let aa = arena.nodes[an.a as usize];
+                        let ab = arena.nodes[an.b as usize];
+                        eprintln!("  Root.a.a tag: {} (.a={}, .b={})", tag_names[aa.tag as usize], aa.a, aa.b);
+                        eprintln!("  Root.a.b tag: {} (.a={}, .b={})", tag_names[ab.tag as usize], ab.a, ab.b);
+                    }
+                }
+
+                // Check the WHNF tag of root
+                arena.set_checkpoint();
+                let mut f = 100u64;
+                arena.whnf(item09_root, &mut f);
+                let whnf_root = arena.follow(item09_root);
+                let wrn = arena.nodes[whnf_root as usize];
+                eprintln!("  After WHNF(100 fuel): tag={}", tag_names[wrn.tag as usize]);
+                arena.restore_checkpoint();
+            }
+        }
+        "decompile" => {
+            // Decompile SKI expression to readable lambda/DSL form
+            let mut vc = 0usize;
+            eprintln!("Root node: idx={} tag={}", result, arena.nodes[result as usize].tag);
+            eprintln!("Root resolved: {:?}", resolve(&arena, result));
+            let output = decompile(&arena, result, 0, &mut vc);
+            // Write to file if --img is specified, otherwise print
+            {
+                let path = format!("{}_decompile.txt", img_path);
+                std::fs::write(&path, &output).expect("write decompile output");
+                eprintln!("Wrote {} chars to {}", output.len(), path);
+            }
+            // Always print (truncated if long)
+            if output.len() > 200000 {
+                println!("{}", &output[..200000]);
+                eprintln!("... (truncated at 200000 chars, total {})", output.len());
+            } else {
+                println!("{}", output);
+                eprintln!("Total output: {} chars", output.len());
+            }
+        }
+        "walk-item09" | "test-selfapp" => {
+            // Walk the input as a list structure, characterize each element
+            // Usage: ski-eval.exe extracted/data_items/item_09.txt --decode walk-item09
+            // Also: --decode test-selfapp for self-application experiments
+            let item09_root = result;
+            let base_size = arena.nodes.len();
+            eprintln!("Walking list from root={} arena={}", item09_root, base_size);
+
+            let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
+            let fuel_per_op: u64 = 50_000_000;
+
+            let mut current = item09_root;
+            let mut count = 0usize;
+            let mut bool_false_count = 0u64;
+            let mut bool_true_count = 0u64;
+            let mut num_count = 0u64;
+            let mut num_values: Vec<(usize, u64)> = Vec::new();
+            let mut other_count = 0u64;
+            let mut other_tags: Vec<(usize, u8)> = Vec::new();
+
+            loop {
+                // Check if current node is nil (= false = KI)
+                let current_check = decode_bool(&mut arena, current, fuel_per_op);
+                if current_check == Some(false) {
+                    eprintln!("  End of list at element {}", count);
+                    break;
+                }
+                if current_check == Some(true) {
+                    eprintln!("  WARNING: list node decoded as true at element {}", count);
+                    break;
+                }
+                // current_check == None → pair2 node → extract value and rest
+
+                // Extract value (pair_snd)
+                let mut f_snd = fuel_per_op;
+                let value = pair_snd(&mut arena, current, &mut f_snd);
+                let value = arena.follow(value);
+
+                // Extract rest (pair_fst) — do this now while current is still valid
+                let mut f_fst = fuel_per_op;
+                let rest = pair_fst(&mut arena, current, &mut f_fst);
+                let rest = arena.follow(rest);
+
+                // Analyze the value
+                let vbool = decode_bool(&mut arena, value, fuel_per_op);
+                if let Some(b) = vbool {
+                    if count < 100 {
+                        eprintln!("  [{}] bool: {}", count, b);
+                    }
+                    if b { bool_true_count += 1; } else { bool_false_count += 1; }
+                } else {
+                    // Not a simple bool — try as Scott number
+                    // Use checkpoint to avoid polluting arena with number-decoding nodes
+                    arena.set_checkpoint();
+                    let vnum = decode_scott_num(&mut arena, value, fuel_per_op);
+                    arena.restore_checkpoint();
+
+                    if let Some(n) = vnum {
+                        if count < 100 {
+                            eprintln!("  [{}] num: {}", count, n);
+                        }
+                        num_count += 1;
+                        if num_values.len() < 500 {
+                            num_values.push((count, n));
+                        }
+                    } else {
+                        let vtag = arena.nodes[value as usize].tag;
+                        if count < 100 {
+                            eprintln!("  [{}] other: tag={} describe(3): {}",
+                                count, tag_names[vtag as usize],
+                                describe(&arena, value, 3));
+
+                            // Try as Church 5-tuple: apply sel_0 (COND extractor)
+                            arena.set_checkpoint();
+                            let sel0 = build_diamond_sel(&mut arena, 0);
+                            let app = arena.alloc(APP, value, sel0);
+                            let mut f_sel = fuel_per_op;
+                            let f_sel_before = f_sel;
+                            arena.whnf(app, &mut f_sel);
+                            let sel_result = arena.follow(app);
+                            let sel_steps = f_sel_before - f_sel;
+                            let sel_tag = arena.nodes[sel_result as usize].tag;
+                            let sel_bool = decode_bool(&mut arena, sel_result, fuel_per_op / 10);
+                            eprintln!("    -> sel_0(COND): tag={} steps={} bool={:?} describe(2): {}",
+                                tag_names[sel_tag as usize], sel_steps, sel_bool,
+                                describe(&arena, sel_result, 2));
+
+                            // Try sel_1 (NW child)
+                            let sel1 = build_diamond_sel(&mut arena, 1);
+                            let app1 = arena.alloc(APP, value, sel1);
+                            let mut f_sel1 = fuel_per_op;
+                            arena.whnf(app1, &mut f_sel1);
+                            let sel1_result = arena.follow(app1);
+                            let sel1_tag = arena.nodes[sel1_result as usize].tag;
+                            eprintln!("    -> sel_1(NW): tag={} describe(2): {}",
+                                tag_names[sel1_tag as usize],
+                                describe(&arena, sel1_result, 2));
+                            arena.restore_checkpoint();
+                        }
+                        other_count += 1;
+                        if other_tags.len() < 100 {
+                            other_tags.push((count, vtag));
+                        }
+                    }
+                }
+
+                current = rest;
+                count += 1;
+
+                if count % 1000 == 0 {
+                    eprintln!("  ... {} elements (arena: {} nodes)", count, arena.nodes.len());
+                }
+                if count > 100_000 {
+                    eprintln!("  LIMIT: stopping after 100000 elements");
+                    break;
                 }
             }
 
-            // Also try pair1_fst/pair1_snd to see if it's a pair structure
-            eprintln!("\n  Trying pair1_fst/pair1_snd...");
-            let mut f1 = 500_000_000u64;
-            let fst = pair1_fst(&mut arena, item09_root, &mut f1);
-            let fst_follow = arena.follow(fst);
-            eprintln!("  pair1_fst: tag={} describe(3): {}",
-                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[fst_follow as usize].tag as usize],
-                &describe(&arena, fst_follow, 3));
-            let fst_bool = decode_bool(&mut arena, fst_follow, 5_000_000);
-            eprintln!("    as bool: {:?}", fst_bool);
+            eprintln!("\n=== item_09 List Walk Summary ===");
+            eprintln!("Total elements: {}", count);
+            eprintln!("Booleans: {} false + {} true = {} ({:.1}%)",
+                bool_false_count, bool_true_count,
+                bool_false_count + bool_true_count,
+                (bool_false_count + bool_true_count) as f64 / count.max(1) as f64 * 100.0);
+            eprintln!("Numbers: {} ({:.1}%)", num_count, num_count as f64 / count.max(1) as f64 * 100.0);
+            eprintln!("Other: {} ({:.1}%)", other_count, other_count as f64 / count.max(1) as f64 * 100.0);
 
-            let mut f2 = 500_000_000u64;
-            let snd = pair1_snd(&mut arena, item09_root, &mut f2);
-            let snd_follow = arena.follow(snd);
-            eprintln!("  pair1_snd: tag={} describe(2): {}",
-                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[snd_follow as usize].tag as usize],
-                &describe(&arena, snd_follow, 2));
+            if !num_values.is_empty() {
+                let nums_only: Vec<u64> = num_values.iter().map(|&(_, n)| n).collect();
+                let max_val = *nums_only.iter().max().unwrap();
+                let min_val = *nums_only.iter().min().unwrap();
+                eprintln!("Number range: {} - {}", min_val, max_val);
+                eprintln!("First 50 numbers: {:?}",
+                    &num_values[..num_values.len().min(50)]);
+            }
+            if !other_tags.is_empty() {
+                eprintln!("Other tags: {:?}", &other_tags[..other_tags.len().min(20)]);
+            }
 
-            // Try pair2 extraction
-            eprintln!("\n  Trying pair2 (pair_fst/pair_snd)...");
-            let mut f3 = 500_000_000u64;
-            let p2_fst = pair_fst(&mut arena, item09_root, &mut f3);
-            let p2_fst_follow = arena.follow(p2_fst);
-            eprintln!("  pair_fst: tag={} describe(2): {}",
-                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[p2_fst_follow as usize].tag as usize],
-                &describe(&arena, p2_fst_follow, 2));
-            let p2_fst_bool = decode_bool(&mut arena, p2_fst_follow, 5_000_000);
-            eprintln!("    as bool: {:?}", p2_fst_bool);
+            // === Decompile each element ===
+            // Re-extract elements (list was already walked above) and decompile each one
+            {
+                eprintln!("\n=== Decompile each list element ===");
+                // First pass: extract all element node indices
+                let mut elem_indices: Vec<u32> = Vec::new();
+                let mut cur = item09_root;
+                for _ in 0..20 {
+                    let cb = decode_bool(&mut arena, cur, fuel_per_op);
+                    if cb == Some(false) || cb == Some(true) { break; }
+                    let mut f1 = fuel_per_op;
+                    let value = pair_snd(&mut arena, cur, &mut f1);
+                    let value = arena.follow(value);
+                    let mut f2 = fuel_per_op;
+                    let rest = pair_fst(&mut arena, cur, &mut f2);
+                    let rest = arena.follow(rest);
+                    elem_indices.push(value);
+                    cur = rest;
+                }
+                // Second pass: decompile each (no mut arena needed)
+                for (idx, &value) in elem_indices.iter().enumerate() {
+                    let mut vc = 0usize;
+                    let decomp = decompile(&arena, value, 0, &mut vc);
+                    let path = format!("{}_elem{}_decompile.txt", img_path, idx);
+                    std::fs::write(&path, &decomp).ok();
+                    eprintln!("  elem[{}]: {} chars, resolved: {:?}, saved to {}",
+                        idx, decomp.len(), resolve(&arena, value), path);
+                    // Print first 500 chars
+                    let preview = if decomp.len() > 500 { &decomp[..500] } else { &decomp };
+                    eprintln!("    preview: {}", preview);
 
-            let mut f4 = 500_000_000u64;
-            let p2_snd = pair_snd(&mut arena, item09_root, &mut f4);
-            let p2_snd_follow = arena.follow(p2_snd);
-            eprintln!("  pair_snd: tag={} describe(2): {}",
-                ["APP","S","K","I","S1","S2","K1","IND"][arena.nodes[p2_snd_follow as usize].tag as usize],
-                &describe(&arena, p2_snd_follow, 2));
-            let p2_snd_bool = decode_bool(&mut arena, p2_snd_follow, 5_000_000);
-            eprintln!("    as bool: {:?}", p2_snd_bool);
+                    // For S2 elements, also decompile the f-field (n.a) separately
+                    if let Resolved::RS2(fa, _fb) = resolve(&arena, value) {
+                        let mut vc2 = 0usize;
+                        let fa_decomp = decompile(&arena, fa, 0, &mut vc2);
+                        let fa_path = format!("{}_elem{}_f_decompile.txt", img_path, idx);
+                        std::fs::write(&fa_path, &fa_decomp).ok();
+                        eprintln!("  elem[{}].f: {} chars, saved to {}", idx, fa_decomp.len(), fa_path);
+                    }
+                    // For K1 elements, decompile the value (n.a)
+                    if let Resolved::RK1(ka) = resolve(&arena, value) {
+                        let mut vc3 = 0usize;
+                        let ka_decomp = decompile(&arena, ka, 0, &mut vc3);
+                        let ka_path = format!("{}_elem{}_val_decompile.txt", img_path, idx);
+                        std::fs::write(&ka_path, &ka_decomp).ok();
+                        eprintln!("  elem[{}].val: {} chars, saved to {}", idx, ka_decomp.len(), ka_path);
+                    }
+                }
+            }
 
-            // Try decode_bool directly on item09_root
-            eprintln!("\n  decode_bool(item09_root): {:?}", decode_bool(&mut arena, item09_root, 5_000_000));
+            // === Self-application experiments ===
+            // All function elements have form element[i](x) = f_i(x)(x) (Y-combinator building block)
+            // Test: what happens when we apply elements to themselves or to each other?
+            if decode_mode == "test-selfapp" {
+                eprintln!("\n=== Self-application experiments ===");
+
+                // First, re-extract the elements without checkpoint pollution
+                let mut elements: Vec<u32> = Vec::new();
+                {
+                    let mut cur = item09_root;
+                    loop {
+                        let cb = decode_bool(&mut arena, cur, fuel_per_op);
+                        if cb == Some(false) || cb == Some(true) { break; }
+                        let mut fs = fuel_per_op;
+                        let val = pair_snd(&mut arena, cur, &mut fs);
+                        let val = arena.follow(val);
+                        elements.push(val);
+                        let mut ff = fuel_per_op;
+                        let rest = pair_fst(&mut arena, cur, &mut ff);
+                        cur = arena.follow(rest);
+                    }
+                }
+                eprintln!("  Extracted {} elements", elements.len());
+
+                let tag_names: [&str; 8] = ["APP", "S", "K", "I", "S1", "S2", "K1", "IND"];
+
+                // Test: element[0](element[0]) — self-application
+                for i in 0..elements.len().min(4) {
+                    for j in 0..elements.len().min(4) {
+                        arena.set_checkpoint();
+                        let app = arena.alloc(APP, elements[i], elements[j]);
+                        let mut f = 500_000_000u64;
+                        let fb = f;
+                        arena.whnf(app, &mut f);
+                        let r = arena.follow(app);
+                        let steps = fb - f;
+                        let rtag = arena.nodes[r as usize].tag;
+                        eprintln!("  elem[{}](elem[{}]): tag={} steps={} describe(2): {}",
+                            i, j, tag_names[rtag as usize], steps,
+                            &describe(&arena, r, 2));
+
+                        // Check if result is a Church 5-tuple by applying sel_0
+                        if steps > 0 && steps < 500_000_000 {
+                            let sel0 = build_diamond_sel(&mut arena, 0);
+                            let app2 = arena.alloc(APP, r, sel0);
+                            let mut f2 = 500_000_000u64;
+                            let fb2 = f2;
+                            arena.whnf(app2, &mut f2);
+                            let r2 = arena.follow(app2);
+                            let steps2 = fb2 - f2;
+                            let b = decode_bool(&mut arena, r2, fuel_per_op);
+                            eprintln!("    sel_0(COND): tag={} steps={} bool={:?}",
+                                tag_names[arena.nodes[r2 as usize].tag as usize], steps2, b);
+                        }
+                        arena.restore_checkpoint();
+                    }
+                }
+
+                // Test: element[i](key_number) for key codes
+                eprintln!("\n=== Element applied to key codes ===");
+                for i in 0..elements.len().min(4) {
+                    arena.set_checkpoint();
+                    let key_val = make_scott_num(&mut arena, 5); // first key code
+                    let app = arena.alloc(APP, elements[i], key_val);
+                    let mut f = 500_000_000u64;
+                    let fb = f;
+                    arena.whnf(app, &mut f);
+                    let r = arena.follow(app);
+                    let steps = fb - f;
+                    let rtag = arena.nodes[r as usize].tag;
+                    eprintln!("  elem[{}](scott_5): tag={} steps={} describe(2): {}",
+                        i, tag_names[rtag as usize], steps,
+                        &describe(&arena, r, 2));
+
+                    if steps > 0 && steps < 500_000_000 {
+                        let sel0 = build_diamond_sel(&mut arena, 0);
+                        let app2 = arena.alloc(APP, r, sel0);
+                        let mut f2 = 500_000_000u64;
+                        arena.whnf(app2, &mut f2);
+                        let r2 = arena.follow(app2);
+                        let b = decode_bool(&mut arena, r2, fuel_per_op);
+                        eprintln!("    sel_0(COND): bool={:?}", b);
+                    }
+                    arena.restore_checkpoint();
+                }
+
+                // Test: element[i](key_string) where key_string is the full key
+                eprintln!("\n=== Element applied to key string ===");
+                for i in 0..elements.len().min(4) {
+                    arena.set_checkpoint();
+                    let key_codes_list: Vec<u64> = vec![5, 0, 17, 5, 3];
+                    let mut key_str = make_false(&mut arena); // nil
+                    for &code in key_codes_list.iter().rev() {
+                        let ch_num = make_scott_num(&mut arena, code);
+                        key_str = make_pair(&mut arena, ch_num, key_str);
+                    }
+                    let app = arena.alloc(APP, elements[i], key_str);
+                    let mut f = 500_000_000u64;
+                    let fb = f;
+                    arena.whnf(app, &mut f);
+                    let r = arena.follow(app);
+                    let steps = fb - f;
+                    let rtag = arena.nodes[r as usize].tag;
+                    eprintln!("  elem[{}](key_str): tag={} steps={} describe(2): {}",
+                        i, tag_names[rtag as usize], steps,
+                        &describe(&arena, r, 2));
+
+                    if steps > 0 && steps < 500_000_000 {
+                        let sel0 = build_diamond_sel(&mut arena, 0);
+                        let app2 = arena.alloc(APP, r, sel0);
+                        let mut f2 = 500_000_000u64;
+                        arena.whnf(app2, &mut f2);
+                        let r2 = arena.follow(app2);
+                        let b = decode_bool(&mut arena, r2, fuel_per_op);
+                        eprintln!("    sel_0(COND): bool={:?}", b);
+                    }
+                    arena.restore_checkpoint();
+                }
+
+                // Test: Y(element[0]) — apply Y combinator
+                eprintln!("\n=== Y combinator applied to elements ===");
+                // Y = S(S(K(SII))(S(S(KS)K)(K(SII))))
+                // But simpler to implement omega: element[0](element[0])
+                // which is already tested above. Let's check element[3](K1) specifically.
+                {
+                    arena.set_checkpoint();
+                    // element[3] is K1, so element[3](x) = constant_value (ignores x)
+                    // Let's see what that constant is
+                    let dummy = arena.alloc(I, NIL, NIL);
+                    let app = arena.alloc(APP, elements[3], dummy);
+                    let mut f = 500_000_000u64;
+                    let fb = f;
+                    arena.whnf(app, &mut f);
+                    let r = arena.follow(app);
+                    let steps = fb - f;
+                    eprintln!("  elem[3](I): tag={} steps={} describe(3): {}",
+                        tag_names[arena.nodes[r as usize].tag as usize], steps,
+                        &describe(&arena, r, 3));
+
+                    // Check the constant value deeper
+                    let sel0 = build_diamond_sel(&mut arena, 0);
+                    let app2 = arena.alloc(APP, r, sel0);
+                    let mut f2 = 500_000_000u64;
+                    arena.whnf(app2, &mut f2);
+                    let r2 = arena.follow(app2);
+                    let b = decode_bool(&mut arena, r2, fuel_per_op);
+                    eprintln!("    constant(sel_0): bool={:?} describe(2): {}",
+                        b, &describe(&arena, r2, 2));
+
+                    // Check if it's a pair2 (list)
+                    let is_nil = decode_bool(&mut arena, r, fuel_per_op);
+                    eprintln!("    is_bool: {:?}", is_nil);
+
+                    // Try as number
+                    let n = decode_scott_num(&mut arena, r, fuel_per_op);
+                    eprintln!("    as_number: {:?}", n);
+
+                    arena.restore_checkpoint();
+                }
+            }
         }
         _ => {
             eprintln!("Unknown decode mode: {}", decode_mode);
