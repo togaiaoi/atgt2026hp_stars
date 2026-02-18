@@ -34,7 +34,19 @@
       "Bash(grep:*)",
       "Bash(cat:*)",
       "Bash(codex exec \"以下のファイルを読んで、文字コードのマッピングを推定してください。analysis_charcode.md と reference/hint-new.md を読んでください。特に、エラーメッセージ（5文字: 19,20,22,9,21）が日本語の何に対応するか、そこから文字コードテーブルを逆引きできないか考えてください。\")",
-      "Bash(codex exec \"analysis_charcode.md を読んだ上で追加分析してください。\n\nエラーメッセージ（5文字: 19,20,22,9,21）が「ちがいます」だと仮定すると:\nち=19, が=20, い=22, ま=9, す=21\n\n質問文は（読み順）:\n2, 8, 16, 5, 6, 20, 6, 19, 8, 22, 8, 19, 22, 21, 8, 24, 22, 23, 8, 19, 17, 1, 8, 7, 5, 17, 1, 22, 5, 8, 19, 6, 13\n\n既知: 19=ち, 20=が, 22=い, 9=ま, 21=す\n8が最頻出（9回）→スペースか句読点の可能性大\n\n質問文を部分的に埋めると:\n?, 8, ?, ?, ?, が, ?, ち, 8, い, 8, ち, い, す, 8, ?, い, ?, 8, ち, ?, ?, 8, ?, ?, ?, ?, い, ?, 8, ち, ?, ?\n\nこの部分情報から、残りの文字コードを推測してください。\n- 8はスペースっぽい\n- 使われている値: 1,2,5,6,7,8,13,16,17,19,20,21,22,23,24\n- 「ちがいます」が正しいなら、濁音・半濁音も独立コードを持つ体系\n- 日本語の自然な文として読めるようなマッピングを探してください\n\")"
+      "Bash(codex exec \"analysis_charcode.md を読んだ上で追加分析してください。\n\nエラーメッセージ（5文字: 19,20,22,9,21）が「ちがいます」だと仮定すると:\nち=19, が=20, い=22, ま=9, す=21\n\n質問文は（読み順）:\n2, 8, 16, 5, 6, 20, 6, 19, 8, 22, 8, 19, 22, 21, 8, 24, 22, 23, 8, 19, 17, 1, 8, 7, 5, 17, 1, 22, 5, 8, 19, 6, 13\n\n既知: 19=ち, 20=が, 22=い, 9=ま, 21=す\n8が最頻出（9回）→スペースか句読点の可能性大\n\n質問文を部分的に埋めると:\n?, 8, ?, ?, ?, が, ?, ち, 8, い, 8, ち, い, す, 8, ?, い, ?, 8, ち, ?, ?, 8, ?, ?, ?, ?, い, ?, 8, ち, ?, ?\n\nこの部分情報から、残りの文字コードを推測してください。\n- 8はスペースっぽい\n- 使われている値: 1,2,5,6,7,8,13,16,17,19,20,21,22,23,24\n- 「ちがいます」が正しいなら、濁音・半濁音も独立コードを持つ体系\n- 日本語の自然な文として読めるようなマッピングを探してください\n\")",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "Bash(node -e \"\nasync function main\\(\\) {\n  const res = await fetch\\(''https://stars-2026-hp.xyz/'', {\n    method: ''POST'',\n    headers: { ''content-type'': ''application/json'' },\n    body: JSON.stringify\\({ input: '''' }\\),\n  }\\);\n  const data = await res.json\\(\\);\n  console.log\\(JSON.stringify\\(data, null, 2\\)\\);\n}\nmain\\(\\).catch\\(e => console.error\\(e\\)\\);\n\")",
+      "Bash(node -e \"\nasync function main\\(\\) {\n  const res = await fetch\\(''https://stars-2026-hp.xyz/'', {\n    method: ''POST'',\n    headers: { ''content-type'': ''application/json'' },\n    body: JSON.stringify\\({ input: ''M5PWz'' }\\),\n  }\\);\n  const data = await res.json\\(\\);\n  console.log\\(JSON.stringify\\(data, null, 2\\)\\);\n}\nmain\\(\\).catch\\(e => console.error\\(e\\)\\);\n\")",
+      "Bash(for input in \"a\" \"abc\" \"test\" \"ABCDE\")",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(node -e \"\n  async function main\\(\\) {\n    const res = await fetch\\(''https://stars-2026-hp.xyz/'', {\n      method: ''POST'',\n      headers: { ''content-type'': ''application/json'' },\n      body: JSON.stringify\\({ input: ''$input'' }\\),\n    }\\);\n    const data = await res.json\\(\\);\n    console.log\\(JSON.stringify\\(data\\)\\);\n  }\n  main\\(\\).catch\\(e => console.error\\(e\\)\\);\n  \")",
+      "Bash(done)",
+      "Bash(node scripts/test_server.js:*)",
+      "Bash(node -e '\nasync function main\\(\\) {\n  // Get full response with all headers\n  const res = await fetch\\(\"\"https://stars-2026-hp.xyz/\"\", {\n    method: \"\"POST\"\",\n    headers: { \"\"content-type\"\": \"\"application/json\"\" },\n    body: JSON.stringify\\({ input: \"\"M5PWz\"\" }\\),\n  }\\);\n  console.log\\(\"\"Status:\"\", res.status\\);\n  console.log\\(\"\"Headers:\"\", Object.fromEntries\\(res.headers.entries\\(\\)\\)\\);\n  const text = await res.text\\(\\);\n  console.log\\(\"\"Body:\"\", text\\);\n}\nmain\\(\\).catch\\(e => console.error\\(e\\)\\);\n')"
     ]
   }
 }

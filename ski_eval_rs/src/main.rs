@@ -2768,19 +2768,11 @@ fn main() {
                         arena.nodes.clear();
                         arena.nodes.extend_from_slice(&saved_nodes);
 
-                        // Build input string: [found_key..., test_char]
-                        // String is built as pair chain with outermost = last pushed
-                        // The program reads outer-first, so outermost char is read first
-                        // For the question decoding, outermost was last char (reversed)
-                        // So we push chars in REVERSE reading order:
-                        // string "c1 c2 c3" = pair(c3, pair(c2, pair(c1, nil)))
-                        // This way outer-first traversal gives c3, c2, c1 → reversed = c1, c2, c3
-
-                        // Build the test string in reverse order
+                        // Build input string with found_key chars + test_char
                         let mut all_chars = found_key.clone();
                         all_chars.push(test_char);
 
-                        // Build: pair(last, pair(second_to_last, ... pair(first, nil)))
+                        // Build string as pair chain (outermost = last pushed = last char)
                         let nil = make_false(&mut arena);
                         let mut str_node = nil;
                         for &ch in all_chars.iter() {
@@ -2788,17 +2780,62 @@ fn main() {
                             str_node = make_pair(&mut arena, ch_num, str_node);
                         }
 
-                        // Apply Q to the string
-                        let test_fuel: u64 = 200_000_000;
+                        // Apply Q to the string and force deep evaluation
+                        let test_fuel: u64 = 500_000_000;
+                        let mut total_steps: u64 = 0;
+
+                        // Step A: Q(input) → next I/O instruction
                         let app = arena.alloc(APP, q_idx, str_node);
                         let mut remaining = test_fuel;
                         arena.whnf(app, &mut remaining);
-                        let steps = test_fuel - remaining;
+                        total_steps += test_fuel - remaining;
+                        let io_result = arena.follow(app);
 
-                        results.push((test_char, steps));
+                        // Step B: Extract tag = pair1_fst(result)
+                        let mut fb = test_fuel;
+                        let tag_r = pair1_fst(&mut arena, io_result, &mut fb);
+                        total_steps += test_fuel - fb;
 
-                        if steps > best_steps {
-                            best_steps = steps;
+                        // Step C: Extract Q2 = pair1_snd(result)
+                        let mut fc = test_fuel;
+                        let q2 = pair1_snd(&mut arena, io_result, &mut fc);
+                        total_steps += test_fuel - fc;
+
+                        // Step D: Extract p1 from tag
+                        let mut fd = test_fuel;
+                        let p1_r = pair1_fst(&mut arena, tag_r, &mut fd);
+                        total_steps += test_fuel - fd;
+
+                        // Step E: Decode p1 as Church number
+                        let mut fe = test_fuel;
+                        let p1_val = decode_church_num(&mut arena, p1_r, fe);
+                        // Note: decode_church_num uses its own fuel internally
+
+                        // Step F: Extract data from Q2 = pair1_fst(Q2)
+                        let mut ff = test_fuel;
+                        let data_r = pair1_fst(&mut arena, q2, &mut ff);
+                        total_steps += test_fuel - ff;
+
+                        // Step G: Force-evaluate the data by reading first element
+                        // This triggers the lazy comparison
+                        let is_nil = decode_bool(&mut arena, data_r, test_fuel / 10);
+                        let mut fg = test_fuel;
+                        if is_nil != Some(false) {
+                            // Not nil → extract first char to force comparison
+                            let first_elem = pair_fst(&mut arena, data_r, &mut fg);
+                            total_steps += test_fuel - fg;
+                            // Decode the first char as Scott number
+                            let char_val = decode_scott_num(&mut arena, first_elem, test_fuel / 10);
+                            if pos == 0 && (test_char <= 3 || test_char == 5) {
+                                eprintln!("  char={}: p1={:?}, first_output_char={:?}, total_steps={}",
+                                    test_char, p1_val, char_val, total_steps);
+                            }
+                        }
+
+                        results.push((test_char, total_steps));
+
+                        if total_steps > best_steps {
+                            best_steps = total_steps;
                             best_char = test_char;
                         }
                     }
