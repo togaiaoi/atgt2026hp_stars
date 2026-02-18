@@ -58,7 +58,8 @@
       "Bash(wmic OS get:*)",
       "Bash(systeminfo:*)",
       "Bash(awk:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

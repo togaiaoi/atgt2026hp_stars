@@ -1,0 +1,316 @@
+Key codes: [5, 0, 17, 5, 3]
+Reading very_large_txt/stars_compact.txt...
+  30485221 bytes
+Parsing...
+  30485221 nodes
+Evaluating (fuel=2000000000)...
+  35 reduction steps
+  30485281 total nodes (after reduction)
+SELFTEST pair2: pair_snd(cons(nil, true)) = Some(true) (expected Some(true))
+SELFTEST pair2: pair_fst(cons(nil, true)) = Some(false) (expected Some(false))
+SELFTEST pair2: pair_snd(cons(list1, false)) = Some(false) (expected Some(false))
+SELFTEST pair2: pair_snd(pair_fst(list2)) = Some(true) (expected Some(true))
+SELFTEST diamond sel_0: Some(true) (expected Some(true))
+SELFTEST diamond sel_1: Some(false) (expected Some(false))
+SELFTEST diamond sel_2: Some(true) (expected Some(true))
+SELFTEST diamond sel_3: Some(false) (expected Some(false))
+SELFTEST diamond sel_4: Some(true) (expected Some(true))
+Step 1: p1=Some(1), p2=Some(1)
+  tag node: (S (S I (K (S (S (K S) (S (K K) I)) (K I)))) (K (S (S (K S) (S (K K) I)) (K I))))
+  p1 node: (S (S (K S) (S (K K) I)) (K I))
+  p2 node: (S (S (K S) (S (K K) I)) (K I))
+  [B_fst_val] elem[0]: scott=Some(13) int=Some(13) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[1]: scott=Some(6) int=Some(6) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[2]: scott=Some(19) int=Some(19) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[3]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[4]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[5]: scott=Some(22) int=Some(22) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[6]: scott=Some(1) int=Some(1) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (K I)))))))
+  [B_fst_val] elem[7]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[8]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[9]: scott=Some(7) int=Some(7) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[10]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[11]: scott=Some(1) int=Some(1) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (K I)))))))
+  [B_fst_val] elem[12]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[13]: scott=Some(19) int=Some(19) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[14]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[15]: scott=Some(23) int=Some(23) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[16]: scott=Some(22) int=Some(22) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[17]: scott=Some(24) int=Some(24) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[18]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[19]: scott=Some(21) int=Some(21) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[20]: scott=Some(22) int=Some(22) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[21]: scott=Some(19) int=Some(19) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[22]: scott=Some(8) int=Some(8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[23]: scott=Some(22) int=Some(22) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[24]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[25]: scott=Some(19) int=Some(19) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[26]: scott=Some(6) int=Some(6) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[27]: scott=Some(20) int=Some(20) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[28]: scott=Some(6) int=Some(6) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[29]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[30]: scott=Some(16) int=Some(16) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[31]: scott=Some(8) int=Some(-8) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[32]: scott=Some(2) int=Some(-2) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (K I)))))))
+  [B_fst_val] terminated at nil after 33 elements
+  [B_fst_val] total: 33 elements
+  [B_fst_val] values: 13,6,19,8,5,22,1,17,5,7,8,1,17,19,8,23,22,24,8,21,22,19,8,22,8,19,6,20,6,5,16,8,2
+  [B_fst_val] as string (outer-first): "\r\u{6}\u{13}?\u{5}\u{16}\u{1}\u{11}\u{5}\u{7}?\u{1}\u{11}\u{13}?\u{17}\u{16}\u{18}?\u{15}\u{16}\u{13}\u{8}\u{16}?\u{13}\u{6}\u{14}\u{6}\u{5}\u{10}??"
+  [B_fst_val] as string (reversed): "??\u{10}\u{5}\u{6}\u{14}\u{6}\u{13}?\u{16}\u{8}\u{13}\u{16}\u{15}?\u{18}\u{16}\u{17}?\u{13}\u{11}\u{1}?\u{7}\u{5}\u{11}\u{1}\u{16}\u{5}?\u{13}\u{6}\r"
+  [A_fst_rest] elem[0]: scott=None int=None val=(S (K K) (S (S I (K (S (K K) (S (S I (K (K ...))) (K (S (K ...) (S ... ...))))))) (K (S (K K) (S (S I (K (S (K ...) (S .
+  [A_fst_rest] elem[1]: scott=Some(6) int=Some(6) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [A_fst_rest] elem[2]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[3]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[4]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[5]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[6]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[7]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[8]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[9]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[10]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[11]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[12]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[13]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[14]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[15]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[16]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[17]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[18]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[19]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[20]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[21]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[22]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[23]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[24]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[25]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[26]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[27]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[28]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[29]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[30]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[31]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[32]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[33]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[34]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[35]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[36]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[37]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[38]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[39]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] total: 200 elements
+  [A_fst_rest] values: ?,6,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0
+  [A_fst_rest] as string (outer-first): "?\u{6}\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+  [A_fst_rest] as string (reversed): "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\u{6}?"
+  char[0] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[0] as Scott num: Some(13)
+  char[0] decoded: Some(13)
+  char[1] val node: (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[1] as Scott num: Some(6)
+  char[1] decoded: Some(6)
+  char[2] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[2] as Scott num: Some(19)
+  char[2] decoded: Some(19)
+  char[3] val node: (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[3] as Scott num: Some(8)
+  char[3] decoded: Some(8)
+  char[4] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[4] as Scott num: Some(5)
+  char[4] decoded: Some(5)
+OUTPUT STRING: Some("\u{2}\u{8}\u{10}\u{5}\u{6}\u{14}\u{6}\u{13}\u{8}\u{16}\u{8}\u{13}\u{16}\u{15}\u{8}\u{18}\u{16}\u{17}\u{8}\u{13}\u{11}\u{1}\u{8}\u{7}\u{5}\u{11}\u{1}\u{16}\u{5}\u{8}\u{13}\u{6}\r")
+Step 2: p1=Some(2), p2=Some(1)
+  tag node: (S (S I (K (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I))))) (K (S (S (K S) (S (K K) I)) (K I))))
+  p1 node: (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I)))
+  p2 node: (S (S (K S) (S (K K) I)) (K I))
+INPUT requested (p2=Some(1))
+  Q node: ((S (((S (K (S (K (... ...))))) ((S (K (S (... ...)))) ((S ((... ...) (... ...))) (K I)))) ((K ((S ((... ...) (... ...))) (K I))) (S (K (S (K (S ...)))) (S (K (S (K ...))) (S (K (S ...)) (S (K ...) (S
+  Using key codes: [5, 0, 17, 5, 3]
+  Built key string (B_fst_val reversed, 5 chars)
+Step 3: p1=Some(1), p2=Some(1)
+  tag node: (S (S I (K (S (S (K S) (S (K K) I)) (K I)))) (K (S (S (K S) (S (K K) I)) (K I))))
+  p1 node: (S (S (K S) (S (K K) I)) (K I))
+  p2 node: (S (S (K S) (S (K K) I)) (K I))
+  [B_fst_val] elem[0]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[1]: scott=Some(0) int=Some(0) val=(S (K K) (S (S I (K (K I))) (K (K I))))
+  [B_fst_val] elem[2]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[3]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[4]: scott=Some(3) int=Some(3) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[5]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[6]: scott=Some(0) int=Some(0) val=(S (K K) (S (S I (K (K I))) (K (K I))))
+  [B_fst_val] elem[7]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[8]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[9]: scott=Some(3) int=Some(3) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[10]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[11]: scott=Some(0) int=Some(0) val=(S (K K) (S (S I (K (K I))) (K (K I))))
+  [B_fst_val] elem[12]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[13]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[14]: scott=Some(3) int=Some(3) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[15]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[16]: scott=Some(0) int=Some(0) val=(S (K K) (S (S I (K (K I))) (K (K I))))
+  [B_fst_val] elem[17]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[18]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[19]: scott=Some(3) int=Some(3) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[20]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[21]: scott=Some(0) int=Some(0) val=(S (K K) (S (S I (K (K I))) (K (K I))))
+  [B_fst_val] elem[22]: scott=Some(17) int=Some(17) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[23]: scott=Some(5) int=Some(5) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] elem[24]: scott=Some(3) int=Some(3) val=(S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [B_fst_val] terminated at nil after 25 elements
+  [B_fst_val] total: 25 elements
+  [B_fst_val] values: 5,0,17,5,3,5,0,17,5,3,5,0,17,5,3,5,0,17,5,3,5,0,17,5,3
+  [B_fst_val] as string (outer-first): "\u{5}\0\u{11}\u{5}\u{3}\u{5}\0\u{11}\u{5}\u{3}\u{5}\0\u{11}\u{5}\u{3}\u{5}\0\u{11}\u{5}\u{3}\u{5}\0\u{11}\u{5}\u{3}"
+  [B_fst_val] as string (reversed): "\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}"
+  [A_fst_rest] elem[0]: scott=None int=None val=(S (K K) (S (S I (K (S (K K) (S (S I (K (K ...))) (K (K I)))))) (K (S (K K) (S (S I (K (S (K ...) (S ... ...)))) (K (S (
+  [A_fst_rest] elem[1]: scott=Some(2) int=Some(2) val=(S (K K) (S (S I (K (K I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  [A_fst_rest] elem[2]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[3]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[4]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[5]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[6]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[7]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[8]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[9]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[10]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[11]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[12]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[13]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[14]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[15]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[16]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[17]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[18]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[19]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[20]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[21]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[22]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[23]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[24]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[25]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[26]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[27]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[28]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[29]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[30]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[31]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[32]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[33]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[34]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[35]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[36]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[37]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[38]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] elem[39]: scott=None int=Some(0) val=(K I)
+  [A_fst_rest] total: 200 elements
+  [A_fst_rest] values: ?,2,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0,i0
+  [A_fst_rest] as string (outer-first): "?\u{2}\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+  [A_fst_rest] as string (reversed): "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\u{2}?"
+  char[0] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[0] as Scott num: Some(5)
+  char[0] decoded: Some(5)
+  char[1] val node: (S (K K) (S (S I (K (K I))) (K (K I))))
+  char[1] as Scott num: Some(0)
+  char[1] decoded: Some(0)
+  char[2] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[2] as Scott num: Some(17)
+  char[2] decoded: Some(17)
+  char[3] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (K I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[3] as Scott num: Some(5)
+  char[3] decoded: Some(5)
+  char[4] val node: (S (K K) (S (S I (K (S (K K) I))) (K (S (K K) (S (S I (K (S (K ...) I))) (K (S (K K) (S (S ... ...) (K ...)))))))))
+  char[4] as Scott num: Some(3)
+  char[4] decoded: Some(3)
+OUTPUT STRING: Some("\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}\u{3}\u{5}\u{11}\0\u{5}")
+Step 4: p1=Some(1), p2=Some(2)
+  tag node: (S (S I (K (S (S (K S) (S (K K) I)) (K I)))) (K (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I)))))
+  p1 node: (S (S (K S) (S (K K) I)) (K I))
+  p2 node: (S (S (K S) (S (K K) I)) (S (S (K S) (S (K K) I)) (K I)))
+OUTPUT IMAGE (quadtree, zoom renderer)
+  Arena nodes: 31039442
+  Root children extracted. Arena: 31842011
+  Running initial GC...
+  GC: total=31842011, live=30522839, freed=1319172, free_list=1319172
+  Phase 1: SKIPPED (depths 1-8 are all-black)
+  Phase 2: Center zoom depths 9-25 (snapshot/restore)...
+    Zoom step 1: arena=35423475 free=0
+    Zoom step 2: arena=42461287 free=0
+    Zoom step 3: arena=52024805 free=0
+    Zoom step 4: arena=64488123 free=0
+    Zoom step 5: arena=80235073 free=0
+    Zoom step 6: arena=99643007 free=0
+    Zoom step 7: arena=123089685 free=0
+  Clearing caches and running aggressive GC (zoom-only roots)...
+  Aggressive GC: total=123089685, live=31699026, freed=91390659, free=91390659
+    Zoom to depth 9: arena=123089685 free=63527477
+    Post-zoom GC: total=123089685, live=31961928, freed=91127757, free=91127757
+    Snapshot taken: 123089685 nodes (1477.1 MB)
+      GC: total=597570549, live=139626332, freed=457944217, free=457944217
+      GC: total=797470635, live=265996482, freed=531474153, free=531474153
+      GC: total=979184725, live=403842182, freed=575342543, free=575342543
+      GC: total=979184725, live=456370299, freed=522814426, free=522814426
+      GC: total=979184725, live=532486147, freed=446698578, free=446698578
+      Row 8/8: B=62 W=2 G=0 arena=979184725 free=171614254
+      GC: total=979184725, live=585015300, freed=394169425, free=394169425
+      GC: total=593814168, live=139229441, freed=454584727, free=454584727
+      GC: total=797666277, live=265930975, freed=531735302, free=531735302
+      GC: total=981003980, live=404548950, freed=576455030, free=576455030
+      GC: total=981003980, live=456898058, freed=524105922, free=524105922
+      GC: total=981003980, live=534201983, freed=446801997, free=446801997
+      Row 8/8: B=64 W=0 G=0 arena=981003980 free=169501225
+      GC: total=981003980, live=587350483, freed=393653497, free=393653497
+      GC: total=598965663, live=139724259, freed=459241404, free=459241404
+      GC: total=798757666, live=266097121, freed=532660545, free=532660545
+      GC: total=980477663, live=403946391, freed=576531272, free=576531272
+      GC: total=980477663, live=456474912, freed=524002751, free=524002751
+      GC: total=980477663, live=532593040, freed=447884623, free=447884623
+      Row 8/8: B=56 W=8 G=0 arena=980477663 free=172321259
+      GC: total=980477663, live=585122597, freed=395355066, free=395355066
+      GC: total=595252203, live=139327351, freed=455924852, free=455924852
+      GC: total=799006145, live=266031601, freed=532974544, free=532974544
+      GC: total=982349762, live=404653148, freed=577696614, free=577696614
+      GC: total=982349762, live=457002660, freed=525347102, free=525347102
+      GC: total=982349762, live=534308882, freed=448040880, free=448040880
+      Row 8/8: B=62 W=2 G=0 arena=982349762 free=170241526
+      GC: total=982349762, live=587457780, freed=394891982, free=394891982
+      GC: total=599004396, live=139715033, freed=459289363, free=459289363
+      GC: total=798783057, live=266087899, freed=532695158, free=532695158
+      GC: total=980503067, live=403937171, freed=576565896, free=576565896
+      GC: total=980503067, live=456465692, freed=524037375, free=524037375
+      GC: total=980503067, live=532583822, freed=447919245, free=447919245
+      Row 8/8: B=60 W=4 G=0 arena=980503067 free=172339801
+      GC: total=980503067, live=585113383, freed=395389684, free=395389684
+      GC: total=595272306, live=139318083, freed=455954223, free=455954223
+      GC: total=799004416, live=266022329, freed=532982087, free=532982087
+      GC: total=982348011, live=404643857, freed=577704154, free=577704154
+      GC: total=982348011, live=456993367, freed=525354644, free=525354644
+      GC: total=982348011, live=534299574, freed=448048437, free=448048437
+      Row 8/8: B=36 W=28 G=0 arena=982348011 free=170244652
+      GC: total=982348011, live=587448450, freed=394899561, free=394899561
+      GC: total=600446052, live=139812955, freed=460633097, free=460633097
+      GC: total=800119781, live=266188521, freed=533931260, free=533931260
+      GC: total=800119781, live=317672806, freed=482446975, free=482446975
+      GC: total=800119781, live=404041335, freed=396078446, free=396078446
+      GC: total=800119781, live=456570266, freed=343549515, free=343549515
+      GC: total=854848864, live=532690720, freed=322158144, free=322158144
+      Row 8/8: B=3 W=61 G=0 arena=854848864 free=46084867
+      GC: total=854848864, live=585220653, freed=269628211, free=269628211
+      GC: total=596764353, live=139416109, freed=457348244, free=457348244
+      GC: total=800416631, live=266123077, freed=534293554, free=534293554
+      GC: total=800416631, live=318212754, freed=482203877, free=482203877
+      GC: total=800416631, live=404748139, freed=395668492, free=395668492
+      GC: total=800416631, live=457098033, freed=343318598, free=343318598
+      GC: total=861722018, live=534406627, freed=327315391, free=327315391
+      Row 8/8: B=6 W=58 G=0 arena=861722018 free=48983870
+      GC: total=861722018, live=587555887, freed=274166131, free=274166131
+      GC: total=594206715, live=139359105, freed=454847610, free=454847610
+      GC: total=797723344, live=266027914, freed=531695430, free=531695430
+      GC: total=981104381, live=404645670, freed=576458711, free=576458711
+      GC: total=981104381, live=456995182, freed=524109199, free=524109199
+      GC: total=981104381, live=534298939, freed=446805442, free=446805442
+      Row 8/8: B=64 W=0 G=0 arena=981104381 free=169482419
+      GC: total=981104381, live=587447843, freed=393656538, free=393656538
+      GC: total=600761439, live=139978535, freed=460782904, free=460782904
+      GC: total=800150994, live=266313749, freed=533837245, free=533837245
+      GC: total=800150994, live=317798468, freed=482352526, free=482352526
+      GC: total=800150994, live=404166310, freed=395984684, free=395984684
+      GC: total=800150994, live=456695639, freed=343455355, free=343455355
+      GC: total=854961169, live=532815849, freed=322145320, free=322145320
+      Row 8/8: B=64 W=0 G=0 arena=854961169 free=46069103

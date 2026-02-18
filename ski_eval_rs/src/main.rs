@@ -57,8 +57,8 @@ impl Arena {
                 return idx;
             }
         }
-        // Arena size limit: 1.9B nodes (~22.8GB) — push memory to the max
-        if self.nodes.len() >= 1_900_000_000 {
+        // Arena size limit: must be <= initial capacity to prevent Vec doubling
+        if self.nodes.len() >= 1_400_000_000 {
             eprintln!("ARENA LIMIT: {} nodes reached, aborting", self.nodes.len());
             std::process::exit(1);
         }
@@ -659,8 +659,9 @@ fn main() {
     let input_len = input.len();
     eprintln!("  {} bytes", input_len);
 
-    // Estimate node count
-    let estimated_nodes = input_len * 2;
+    // Pre-allocate arena: 1.5B nodes × 12B = 18GB.
+    // snapshot (123M × 12B = 1.5GB) + arena = ~19.5GB total, fits in 32GB.
+    let estimated_nodes = 1_500_000_000usize;
     let mut arena = Arena::new(estimated_nodes);
 
     eprintln!("Parsing...");
@@ -2953,8 +2954,8 @@ fn main() {
                                             eprintln!("      Row {}/{}: B={} W={} G={} arena={} free={}",
                                                 row + 1, size, black, white, gray, arena.nodes.len(), arena.free_list.len());
                                         }
-                                        // GC when free list runs low (every row check)
-                                        if arena.free_list.len() < 10_000_000 {
+                                        // GC when free list runs low OR arena grows too large
+                                        if arena.free_list.len() < 100_000_000 || arena.nodes.len() > 800_000_000 {
                                             let mut roots: Vec<u32> = Vec::new();
                                             for &s in sels { roots.push(s); }
                                             for &r in &sub_roots { roots.push(r); }
@@ -3002,13 +3003,15 @@ fn main() {
                                 eprintln!("  Phase 1: SKIPPED (depths 1-8 are all-black)");
 
                                 // Phase 2: Center zoom for depths 9-25
-                                eprintln!("  Phase 2: Center zoom depths 9-25...");
+                                // Strategy: snapshot/restore — clone arena Vec after zoom+GC,
+                                // then restore from snapshot for each 8x8 tile to avoid pollution.
+                                eprintln!("  Phase 2: Center zoom depths 9-25 (snapshot/restore)...");
                                 let mut zoom_tl = root_tl;
                                 let mut zoom_tr = root_tr;
                                 let mut zoom_bl = root_bl;
                                 let mut zoom_br = root_br;
 
-                                // Do zoom steps 1-8 first (without rendering, just navigate to center)
+                                // Do zoom steps 1-7 first (without rendering, just navigate to center)
                                 for step in 1..=7 {
                                     let new_tl = get_child_fn(&mut arena, zoom_tl, 4, &sels, &mut child_cache, eval_fuel);
                                     let new_tr = get_child_fn(&mut arena, zoom_tr, 3, &sels, &mut child_cache, eval_fuel);
@@ -3019,8 +3022,6 @@ fn main() {
                                 }
 
                                 // KEY OPTIMIZATION: Clear caches and GC aggressively.
-                                // Remove `data` and `root_*` from GC roots — only keep zoom subtree alive.
-                                // This lets GC free the vast majority of the original tree.
                                 eprintln!("  Clearing caches and running aggressive GC (zoom-only roots)...");
                                 child_cache.clear();
                                 bool_cache.clear();
@@ -3032,6 +3033,25 @@ fn main() {
                                     eprintln!("  Aggressive GC: total={}, live={}, freed={}, free={}",
                                         total, live, freed, arena.free_list.len());
                                 }
+
+                                // Render target size: 128x128 via 16x16 grid of 8x8 tiles
+                                let render_sz: usize = 128;
+                                let tile_sz: usize = 8;
+                                let tiles_per_side = render_sz / tile_sz; // 16
+                                // Number of quadtree levels from zoom root to tile sub-root
+                                let tile_nav_depth: usize = (tiles_per_side as f64).log2() as usize; // 4
+                                // Number of quadtree levels within each tile
+                                let tile_inner_depth: usize = ((tile_sz / 2) as f64).log2() as usize; // 1 (8x8 → half=4, depth=2... let's compute correctly)
+
+                                // For 128x128: we need 7 levels of quadtree navigation total
+                                //   - The zoom root gives us 4 quadrants (TL/TR/BL/BR) = top level
+                                //   - Each 8x8 tile needs render_shared with its own sub-roots
+                                //   - Tile position (tile_row, tile_col) in 0..16 determines 4 extra levels of navigation
+                                //     from the zoom quadrant down to the tile's sub-root
+                                // Actually: 128x128 means half=64, so depth_within = log2(64) = 6 levels
+                                // The zoom root already splits into 4 quadrants (1 level)
+                                // So from each quadrant we need 6 more levels of navigation
+                                // = 4 levels to reach the 8x8 tile's sub-root + 2 levels within the tile (render_shared handles this)
 
                                 // Now zoom_tl/tr/bl/br represent the center of depth 8
                                 // Continue zooming for depths 9-25, rendering at each depth
@@ -3045,7 +3065,7 @@ fn main() {
                                     eprintln!("    Zoom to depth {}: arena={} free={}",
                                         depth, arena.nodes.len(), arena.free_list.len());
 
-                                    // GC after zoom step (before probe/render) — clears intermediate garbage
+                                    // GC after zoom step
                                     child_cache.clear();
                                     bool_cache.clear();
                                     {
@@ -3057,54 +3077,145 @@ fn main() {
                                             total, live, freed, arena.free_list.len());
                                     }
 
-                                    // Probe bool_b
-                                    let b_tl = get_bool_fn(&mut arena, zoom_tl, &sels, &mut bool_cache, eval_fuel);
-                                    let b_tr = get_bool_fn(&mut arena, zoom_tr, &sels, &mut bool_cache, eval_fuel);
-                                    let b_bl = get_bool_fn(&mut arena, zoom_bl, &sels, &mut bool_cache, eval_fuel);
-                                    let b_br = get_bool_fn(&mut arena, zoom_br, &sels, &mut bool_cache, eval_fuel);
-                                    eprintln!("  Depth {} probe: TL={:?} TR={:?} BL={:?} BR={:?} arena={} free={}",
-                                        depth, b_tl, b_tr, b_bl, b_br, arena.nodes.len(), arena.free_list.len());
+                                    // --- SNAPSHOT/RESTORE TILE RENDERING ---
+                                    // Take a snapshot of the arena after zoom+GC.
+                                    // For each 8x8 tile, restore snapshot, navigate to tile sub-root, render.
+                                    // Snapshot: clone arena state for tile-by-tile restore
+                                    // Use Box<[Node]> to avoid Vec doubling overhead
+                                    let snapshot_nodes: Box<[Node]> = arena.nodes.clone().into_boxed_slice();
+                                    let snapshot_free_list: Box<[u32]> = arena.free_list.clone().into_boxed_slice();
+                                    let snapshot_zoom = [zoom_tl, zoom_tr, zoom_bl, zoom_br];
+                                    let snapshot_sels = sels.clone();
+                                    let snapshot_len = snapshot_nodes.len();
+                                    eprintln!("    Snapshot taken: {} nodes ({:.1} MB)",
+                                        snapshot_len, snapshot_len as f64 * 12.0 / 1_000_000.0);
 
-                                    // GC after probe, before render
-                                    {
-                                        let mut roots: Vec<u32> = Vec::new();
-                                        for &s in &sels { roots.push(s); }
-                                        roots.extend_from_slice(&[zoom_tl, zoom_tr, zoom_bl, zoom_br]);
-                                        let (total, live, freed) = arena.gc(&roots);
-                                        eprintln!("    Pre-render GC: total={}, live={}, freed={}, free={}",
-                                            total, live, freed, arena.free_list.len());
+                                    let mut full_image = vec![0u8; render_sz * render_sz];
+
+                                    // 128x128 = 4 quadrants of 64x64 each
+                                    // Each quadrant is zoom_tl/tr/bl/br
+                                    // Within each 64x64 quadrant, we have 8x8 tiles at positions (tr, tc) in 0..8
+                                    // Navigation: 3 levels from quadrant root to 8x8 tile sub-root
+                                    //   level 0: 64x64 → 32x32 (select NW/NE/SW/SE)
+                                    //   level 1: 32x32 → 16x16
+                                    //   level 2: 16x16 → 8x8 (this is the tile to render)
+                                    // Then render_shared handles the 8x8 (half=4, 2 more levels within)
+
+                                    let quadrant_sz = render_sz / 2; // 64
+                                    let tiles_per_quadrant = quadrant_sz / tile_sz; // 8
+                                    let nav_levels = 3usize; // 64→32→16→8
+
+                                    let mut tile_count = 0usize;
+                                    let total_tiles = (render_sz / tile_sz) * (render_sz / tile_sz); // 256
+
+                                    for qi in 0..4usize {
+                                        let q_row_off = if qi >= 2 { quadrant_sz } else { 0 };
+                                        let q_col_off = if qi == 1 || qi == 3 { quadrant_sz } else { 0 };
+
+                                        for tr in 0..tiles_per_quadrant {
+                                            for tc in 0..tiles_per_quadrant {
+                                                // Restore snapshot: truncate + copy in-place (no reallocation)
+                                                arena.nodes.truncate(snapshot_len);
+                                                arena.nodes[..snapshot_len].copy_from_slice(&snapshot_nodes);
+                                                arena.free_list.clear();
+                                                arena.free_list.extend_from_slice(&snapshot_free_list);
+                                                arena.checkpoint = None;
+                                                arena.saved_nodes.clear();
+
+                                                let zoom_roots = snapshot_zoom;
+                                                let q_root = zoom_roots[qi];
+
+                                                // Navigate nav_levels down to the 8x8 tile sub-root
+                                                // At each level, determine which quadrant (1=TL,2=TR,3=BL,4=BR)
+                                                let mut node = q_root;
+                                                let mut local_row = tr * tile_sz; // pixel row within 64x64 quadrant
+                                                let mut local_col = tc * tile_sz;
+                                                let mut local_size = quadrant_sz;
+
+                                                // Extract 4 sub-roots for the tile by navigating nav_levels
+                                                // After nav_levels steps, node is at an 8x8 sub-tree
+                                                for _nav in 0..nav_levels {
+                                                    let lh = local_size / 2;
+                                                    let child_idx = if local_row < lh {
+                                                        if local_col < lh { 1 } else { 2 }
+                                                    } else {
+                                                        if local_col < lh { 3 } else { 4 }
+                                                    };
+                                                    let app = arena.alloc(APP, node, snapshot_sels[child_idx]);
+                                                    let mut f = eval_fuel;
+                                                    arena.whnf(app, &mut f);
+                                                    node = arena.follow(app);
+                                                    if local_row >= lh { local_row -= lh; }
+                                                    if local_col >= lh { local_col -= lh; }
+                                                    local_size = lh;
+                                                }
+
+                                                // Now `node` is at the 8x8 sub-tree root (a diamond node)
+                                                // Extract its 4 children for render_shared
+                                                let tile_tl = {
+                                                    let app = arena.alloc(APP, node, snapshot_sels[1]);
+                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
+                                                };
+                                                let tile_tr = {
+                                                    let app = arena.alloc(APP, node, snapshot_sels[2]);
+                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
+                                                };
+                                                let tile_bl = {
+                                                    let app = arena.alloc(APP, node, snapshot_sels[3]);
+                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
+                                                };
+                                                let tile_br = {
+                                                    let app = arena.alloc(APP, node, snapshot_sels[4]);
+                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
+                                                };
+
+                                                // Render 8x8 tile using shared lazy evaluation
+                                                let pix = render_shared(
+                                                    &mut arena,
+                                                    [tile_tl, tile_tr, tile_bl, tile_br],
+                                                    tile_sz, &snapshot_sels, eval_fuel,
+                                                    &[tile_tl, tile_tr, tile_bl, tile_br],
+                                                    1_900_000_000
+                                                );
+
+                                                // Copy tile pixels into full image
+                                                let img_row_off = q_row_off + tr * tile_sz;
+                                                let img_col_off = q_col_off + tc * tile_sz;
+                                                for py in 0..tile_sz {
+                                                    for px in 0..tile_sz {
+                                                        full_image[(img_row_off + py) * render_sz + (img_col_off + px)]
+                                                            = pix[py * tile_sz + px];
+                                                    }
+                                                }
+
+                                                tile_count += 1;
+                                                if tile_count % 16 == 0 || tile_count == total_tiles {
+                                                    let bc = full_image.iter().filter(|&&p| p == 0).count();
+                                                    let wc = full_image.iter().filter(|&&p| p == 255).count();
+                                                    let gc = full_image.iter().filter(|&&p| p == 128).count();
+                                                    eprintln!("    Tile {}/{}: arena_peak={} B={} W={} G={}",
+                                                        tile_count, total_tiles, arena.nodes.len(), bc, wc, gc);
+                                                }
+                                            }
+                                        }
                                     }
 
-                                    // Render using shared lazy evaluation
-                                    // NOTE: `data` is NOT in gc_extra_roots — only zoom subtree is kept alive
-                                    let render_sz: usize = 8;
-                                    eprintln!("  Rendering depth {} ({}x{} center zoom)...", depth, render_sz, render_sz);
-                                    let pix = render_shared(
-                                        &mut arena,
-                                        [zoom_tl, zoom_tr, zoom_bl, zoom_br],
-                                        render_sz, &sels, eval_fuel,
-                                        &[zoom_tl, zoom_tr, zoom_bl, zoom_br],
-                                        1_000_000_000
-                                    );
-                                    let bc = pix.iter().filter(|&&p| p == 0).count();
-                                    let wc = pix.iter().filter(|&&p| p == 255).count();
-                                    let gc_count = pix.iter().filter(|&&p| p == 128).count();
-                                    eprintln!("    black={}, white={}, gray={}, arena={}", bc, wc, gc_count, arena.nodes.len());
+                                    // Save the 128x128 image
+                                    let bc = full_image.iter().filter(|&&p| p == 0).count();
+                                    let wc = full_image.iter().filter(|&&p| p == 255).count();
+                                    let gc_count = full_image.iter().filter(|&&p| p == 128).count();
+                                    eprintln!("    Depth {} done: black={}, white={}, gray={}", depth, bc, wc, gc_count);
                                     let fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, render_sz, render_sz);
-                                    write_pgm(&fname, render_sz, render_sz, &pix);
+                                    write_pgm(&fname, render_sz, render_sz, &full_image);
                                     eprintln!("    Saved: {}", fname);
 
-                                    // GC after each depth — only zoom roots, NO `data`
-                                    child_cache.clear();
-                                    bool_cache.clear();
-                                    {
-                                        let mut roots: Vec<u32> = Vec::new();
-                                        for &s in &sels { roots.push(s); }
-                                        roots.extend_from_slice(&[zoom_tl, zoom_tr, zoom_bl, zoom_br]);
-                                        let (total, live, freed) = arena.gc(&roots);
-                                        eprintln!("    Post-depth GC: total={}, live={}, freed={}, free={}",
-                                            total, live, freed, arena.free_list.len());
-                                    }
+                                    // Restore snapshot for next depth's zoom step
+                                    arena.nodes.truncate(snapshot_len);
+                                    arena.nodes[..snapshot_len].copy_from_slice(&snapshot_nodes);
+                                    arena.free_list.clear();
+                                    arena.free_list.extend_from_slice(&snapshot_free_list);
+                                    arena.checkpoint = None;
+                                    arena.saved_nodes.clear();
                                 }
                             }
                             _ => {
