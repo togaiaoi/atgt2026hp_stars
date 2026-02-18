@@ -30,7 +30,10 @@
       "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
       "Bash(export PATH=\"/c/Users/mizuki/.cargo/bin:/usr/bin:/bin:$PATH\")",
       "Bash(PATH=\"/c/Users/mizuki/.cargo/bin:$PATH\" cargo build:*)",
-      "Bash(PATH=\"/c/Users/mizuki/.cargo/bin:$PATH\" ./ski_eval_rs/target/release/ski-eval.exe:*)"
+      "Bash(PATH=\"/c/Users/mizuki/.cargo/bin:$PATH\" ./ski_eval_rs/target/release/ski-eval.exe:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(codex exec \"以下のファイルを読んで、文字コードのマッピングを推定してください。analysis_charcode.md と reference/hint-new.md を読んでください。特に、エラーメッセージ（5文字: 19,20,22,9,21）が日本語の何に対応するか、そこから文字コードテーブルを逆引きできないか考えてください。\")"
     ]
   }
 }
