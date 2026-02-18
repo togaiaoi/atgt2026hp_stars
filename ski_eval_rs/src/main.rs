@@ -2529,6 +2529,40 @@ fn main() {
                 eprintln!("SELFTEST pair2: pair_snd(pair_fst(list2)) = {:?} (expected Some(true))", fst2_snd_bool);
             }
 
+            // SELFTEST: diamond (Church 5-tuple) selectors
+            {
+                let t = make_true(&mut arena);  // S(KK)I
+                let f = make_false(&mut arena);  // KI
+                // Build 5-tuple: (true, false, true, false, true)
+                // Church 5-tuple: λh. h(a)(b)(c)(d)(e)
+                // = S(S(S(S(SI)(Ka))(Kb))(Kc))(Kd))(Ke)
+                let i_n = arena.alloc(I, NIL, NIL);
+                let k_n = arena.alloc(K, NIL, NIL);
+                // Build S(I)(K(a)) step by step
+                let ka = arena.alloc(K1, t, NIL);  // K(true)
+                let si = arena.alloc(S1, i_n, NIL);  // S(I)
+                let si_ka = arena.alloc(S2, i_n, ka);  // S(I)(K(true))
+                let kb = arena.alloc(K1, f, NIL);  // K(false)
+                let s_sika_kb = arena.alloc(S2, si_ka, kb); // S(S(I)(K(true)))(K(false))
+                let kc = arena.alloc(K1, t, NIL);  // K(true)
+                let s2 = arena.alloc(S2, s_sika_kb, kc); // S(S(S(I)(Ka))(Kb))(Kc)
+                let kd = arena.alloc(K1, f, NIL);  // K(false)
+                let s3 = arena.alloc(S2, s2, kd); // S(S(S(S(I)(Ka))(Kb))(Kc))(Kd)
+                let ke = arena.alloc(K1, t, NIL);  // K(true)
+                let tuple5 = arena.alloc(S2, s3, ke); // The 5-tuple
+
+                for i in 0..5 {
+                    let sel = build_diamond_sel(&mut arena, i);
+                    let app = arena.alloc(APP, tuple5, sel);
+                    let mut sf = 1_000_000u64;
+                    arena.whnf(app, &mut sf);
+                    let r = arena.follow(app);
+                    let b = decode_bool(&mut arena, r, 500000);
+                    let expected = if i % 2 == 0 { "Some(true)" } else { "Some(false)" };
+                    eprintln!("SELFTEST diamond sel_{}: {:?} (expected {})", i, b, expected);
+                }
+            }
+
             let mut current = result;
             let mut step = 0u32;
             let fuel_per_step: u64 = 50_000_000;
@@ -2656,68 +2690,210 @@ fn main() {
                                 }
                             }
                             Some(2) => {
-                                // Image output
-                                eprintln!("OUTPUT IMAGE (quadtree)");
-                                let sz = if grid_size > 0 { grid_size as usize } else { 128 };
+                                // Image output - Zoom renderer (hint-new-2)
+                                // false = BLACK (0), true = WHITE (255)
+                                // Depth 1-8: render at 2^(depth-1) x 2^(depth-1)
+                                // Depth 9-25: zoom into center 1/2, render at 128x128
+                                eprintln!("OUTPUT IMAGE (quadtree, zoom renderer)");
+                                eprintln!("  Arena nodes: {}", arena.nodes.len());
+                                // Pre-build selectors once
+                                let sels: [u32; 5] = [
+                                    build_diamond_sel(&mut arena, 0),
+                                    build_diamond_sel(&mut arena, 1),
+                                    build_diamond_sel(&mut arena, 2),
+                                    build_diamond_sel(&mut arena, 3),
+                                    build_diamond_sel(&mut arena, 4),
+                                ];
 
-                                // Probe the image data structure first
-                                eprintln!("  data node: {}", &describe(&arena, data, 0)[..300.min(describe(&arena, data, 0).len())]);
-                                let data_bool = decode_bool(&mut arena, data, 500000);
-                                eprintln!("  data as bool: {:?}", data_bool);
+                                use std::collections::HashMap;
+                                let mut child_cache: HashMap<u32, [u32; 4]> = HashMap::new();
+                                let mut bool_cache: HashMap<u32, Option<bool>> = HashMap::new();
+                                let eval_fuel: u64 = 50_000_000;
 
-                                // Try pair1 extraction to see quadtree structure
+                                // Helper: extract i-th child (1=TL, 2=TR, 3=BL, 4=BR)
+                                fn get_child_fn(arena: &mut Arena, parent: u32, child_idx: usize,
+                                    sels: &[u32; 5], cache: &mut HashMap<u32, [u32; 4]>, fuel: u64) -> u32
                                 {
-                                    let mut f1 = 1_000_000u64;
-                                    let p1f = pair1_fst(&mut arena, data, &mut f1);
-                                    let mut f2 = 1_000_000u64;
-                                    let p1s = pair1_snd(&mut arena, data, &mut f2);
-                                    let p1f_bool = decode_bool(&mut arena, p1f, 500000);
-                                    let p1s_bool = decode_bool(&mut arena, p1s, 500000);
-                                    eprintln!("  pair1_fst(data) as bool: {:?}  node: {}", p1f_bool, &describe(&arena, p1f, 0)[..200.min(describe(&arena, p1f, 0).len())]);
-                                    eprintln!("  pair1_snd(data) as bool: {:?}  node: {}", p1s_bool, &describe(&arena, p1s, 0)[..200.min(describe(&arena, p1s, 0).len())]);
-
-                                    // Try pair2 extraction too
-                                    let mut f3 = 1_000_000u64;
-                                    let p2f = pair_fst(&mut arena, data, &mut f3);
-                                    let mut f4 = 1_000_000u64;
-                                    let p2s = pair_snd(&mut arena, data, &mut f4);
-                                    let p2f_bool = decode_bool(&mut arena, p2f, 500000);
-                                    let p2s_bool = decode_bool(&mut arena, p2s, 500000);
-                                    eprintln!("  pair_fst(data) as bool: {:?}  node: {}", p2f_bool, &describe(&arena, p2f, 0)[..200.min(describe(&arena, p2f, 0).len())]);
-                                    eprintln!("  pair_snd(data) as bool: {:?}  node: {}", p2s_bool, &describe(&arena, p2s, 0)[..200.min(describe(&arena, p2s, 0).len())]);
+                                    let p = arena.follow(parent);
+                                    if let Some(children) = cache.get(&p) {
+                                        return children[child_idx - 1];
+                                    }
+                                    let mut children = [0u32; 4];
+                                    for i in 1..=4 {
+                                        let app = arena.alloc(APP, p, sels[i]);
+                                        let mut f = fuel;
+                                        arena.whnf(app, &mut f);
+                                        children[i - 1] = arena.follow(app);
+                                    }
+                                    cache.insert(p, children);
+                                    children[child_idx - 1]
                                 }
 
-                                // Try diamond selectors on data
-                                for sel_idx in 0..5 {
-                                    let sel = build_diamond_sel(&mut arena, sel_idx);
-                                    let app = arena.alloc(APP, data, sel);
-                                    let mut sf = 2_000_000u64;
-                                    arena.whnf(app, &mut sf);
-                                    let result = arena.follow(app);
-                                    let as_bool = decode_bool(&mut arena, result, 1_000_000);
-                                    eprintln!("  data(sel_{}) as bool: {:?}  node: {}", sel_idx, as_bool,
-                                        &describe(&arena, result, 0)[..200.min(describe(&arena, result, 0).len())]);
+                                // Helper: get bool_b of a node
+                                fn get_bool_fn(arena: &mut Arena, node: u32, sels: &[u32; 5],
+                                    cache: &mut HashMap<u32, Option<bool>>, fuel: u64) -> Option<bool>
+                                {
+                                    let n = arena.follow(node);
+                                    if let Some(&b) = cache.get(&n) { return b; }
+                                    let app = arena.alloc(APP, n, sels[0]);
+                                    let mut f = fuel;
+                                    arena.whnf(app, &mut f);
+                                    let cond = arena.follow(app);
+                                    let b = decode_bool(arena, cond, 5_000_000);
+                                    cache.insert(n, b);
+                                    b
                                 }
 
-                                // Render using diamond_church method (Church-encoded 5-tuple selectors)
-                                let mut pix = vec![128u8; sz * sz];
-                                let mut img_fuel = 2_000_000_000u64;
-                                let mut img_count = 0u64;
-                                eprintln!("  Arena nodes before render: {}", arena.nodes.len());
-                                render_diamond_church(
-                                    &mut arena, data, &mut pix,
-                                    0, 0, sz, sz,
-                                    &mut img_fuel, &mut img_count, 0,
-                                );
-                                let non_gray = pix.iter().filter(|&&p| p != 128).count();
-                                let white = pix.iter().filter(|&&p| p == 255).count();
-                                let black = pix.iter().filter(|&&p| p == 0).count();
-                                eprintln!("  [diamond_church] Rendered {} pixels, non-gray={}/{} (white={}, black={}, gray={})",
-                                    img_count, non_gray, sz*sz, white, black, sz*sz - non_gray);
-                                eprintln!("  Arena nodes after render: {}", arena.nodes.len());
-                                let fname = format!("{}_io_diamond_{}x{}.pgm", img_path, sz, sz);
-                                write_pgm(&fname, sz, sz, &pix);
-                                eprintln!("  Saved: {}", fname);
+                                // Render at multiple depths per the hint-new-2 strategy
+                                // Depth 1-8: render at 2^(depth-1) resolution
+                                // Depth 9-25: zoom into center 1/2, render at 128x128
+                                let max_depth: usize = 25;
+
+                                // We track 4 quadrant roots for the current "virtual root"
+                                // For depth <= 8, we have a single root; for zoom we have 4 sub-roots
+                                let root_tl = get_child_fn(&mut arena, data, 1, &sels, &mut child_cache, eval_fuel);
+                                let root_tr = get_child_fn(&mut arena, data, 2, &sels, &mut child_cache, eval_fuel);
+                                let root_bl = get_child_fn(&mut arena, data, 3, &sels, &mut child_cache, eval_fuel);
+                                let root_br = get_child_fn(&mut arena, data, 4, &sels, &mut child_cache, eval_fuel);
+                                eprintln!("  Root children extracted. Arena: {}", arena.nodes.len());
+
+                                // Render a sub-tree at given resolution
+                                // sub_roots = [TL, TR, BL, BR] of the virtual root
+                                // sz = output image size (must be power of 2, >= 2)
+                                // Returns pixel array
+                                fn render_quadrants(
+                                    arena: &mut Arena,
+                                    sub_roots: [u32; 4],
+                                    sz: usize,
+                                    sels: &[u32; 5],
+                                    child_cache: &mut HashMap<u32, [u32; 4]>,
+                                    bool_cache: &mut HashMap<u32, Option<bool>>,
+                                    fuel: u64,
+                                ) -> Vec<u8> {
+                                    let half = sz / 2;
+                                    let k = (half as f64).log2() as usize; // levels to traverse within each quadrant
+                                    let mut pix = vec![0u8; sz * sz]; // default BLACK (false)
+
+                                    for row in 0..sz {
+                                        for col in 0..sz {
+                                            // Determine which quadrant
+                                            let (qi, mut r, mut c) = if row < half {
+                                                if col < half { (0, row, col) } else { (1, row, col - half) }
+                                            } else {
+                                                if col < half { (2, row - half, col) } else { (3, row - half, col - half) }
+                                            };
+                                            let mut node = sub_roots[qi];
+
+                                            // Navigate k levels within the quadrant
+                                            let mut ok = true;
+                                            for level in 0..k {
+                                                let h = half >> (level + 1);
+                                                let sel_idx = if r < h {
+                                                    if c < h { 1 } else { c -= h; 2 }
+                                                } else {
+                                                    r -= h;
+                                                    if c < h { 3 } else { c -= h; 4 }
+                                                };
+                                                node = get_child_fn(arena, node, sel_idx, sels, child_cache, fuel);
+                                                if arena.nodes.len() > 490_000_000 {
+                                                    ok = false;
+                                                    break;
+                                                }
+                                            }
+
+                                            let b = if ok {
+                                                get_bool_fn(arena, node, sels, bool_cache, fuel)
+                                            } else {
+                                                None
+                                            };
+
+                                            // false = BLACK (0), true = WHITE (255)
+                                            pix[row * sz + col] = match b {
+                                                Some(true) => 255u8,
+                                                Some(false) => 0u8,
+                                                None => 128u8,
+                                            };
+                                        }
+                                        if arena.nodes.len() > 490_000_000 {
+                                            eprintln!("    Arena limit at row {}", row);
+                                            break;
+                                        }
+                                    }
+                                    pix
+                                }
+
+                                // Phase 1: Render depths 1-8
+                                for depth in 1..=8usize {
+                                    let sz = 1usize << (depth - 1); // 1, 2, 4, ..., 128
+                                    if sz < 2 {
+                                        // Depth 1: just the root bool_b
+                                        let b = get_bool_fn(&mut arena, data, &sels, &mut bool_cache, eval_fuel);
+                                        let color = match b { Some(true) => 255u8, Some(false) => 0u8, _ => 128u8 };
+                                        eprintln!("  Depth {}: 1x1 pixel = {} (bool={:?})", depth, color, b);
+                                        let fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, 1, 1);
+                                        write_pgm(&fname, 1, 1, &[color]);
+                                        eprintln!("  Saved: {}", fname);
+                                        continue;
+                                    }
+                                    eprintln!("  Rendering depth {} ({}x{})... Arena: {}", depth, sz, sz, arena.nodes.len());
+                                    let pix = render_quadrants(
+                                        &mut arena,
+                                        [root_tl, root_tr, root_bl, root_br],
+                                        sz, &sels, &mut child_cache, &mut bool_cache, eval_fuel
+                                    );
+                                    let bc = pix.iter().filter(|&&p| p == 0).count();
+                                    let wc = pix.iter().filter(|&&p| p == 255).count();
+                                    let gc = pix.iter().filter(|&&p| p == 128).count();
+                                    eprintln!("    black={}, white={}, gray={}, arena={}", bc, wc, gc, arena.nodes.len());
+                                    let fname = format!("{}_depth{}_{}x{}.pgm", img_path, depth, sz, sz);
+                                    write_pgm(&fname, sz, sz, &pix);
+                                    eprintln!("    Saved: {}", fname);
+                                    if arena.nodes.len() > 480_000_000 {
+                                        eprintln!("    Arena too large, stopping phase 1");
+                                        break;
+                                    }
+                                }
+
+                                // Phase 2: Center zoom for depths 9-25
+                                // Start with the depth-8 quadrants and zoom into center
+                                let mut zoom_tl = root_tl;
+                                let mut zoom_tr = root_tr;
+                                let mut zoom_bl = root_bl;
+                                let mut zoom_br = root_br;
+
+                                for depth in 9..=max_depth {
+                                    // Center zoom: extract the inner quadrants
+                                    // center_TL = TL's BR (sel_4)
+                                    // center_TR = TR's BL (sel_3)
+                                    // center_BL = BL's TR (sel_2)
+                                    // center_BR = BR's TL (sel_1)
+                                    let new_tl = get_child_fn(&mut arena, zoom_tl, 4, &sels, &mut child_cache, eval_fuel);
+                                    let new_tr = get_child_fn(&mut arena, zoom_tr, 3, &sels, &mut child_cache, eval_fuel);
+                                    let new_bl = get_child_fn(&mut arena, zoom_bl, 2, &sels, &mut child_cache, eval_fuel);
+                                    let new_br = get_child_fn(&mut arena, zoom_br, 1, &sels, &mut child_cache, eval_fuel);
+                                    zoom_tl = new_tl;
+                                    zoom_tr = new_tr;
+                                    zoom_bl = new_bl;
+                                    zoom_br = new_br;
+
+                                    eprintln!("  Rendering depth {} (128x128 center zoom)... Arena: {}", depth, arena.nodes.len());
+                                    let pix = render_quadrants(
+                                        &mut arena,
+                                        [zoom_tl, zoom_tr, zoom_bl, zoom_br],
+                                        128, &sels, &mut child_cache, &mut bool_cache, eval_fuel
+                                    );
+                                    let bc = pix.iter().filter(|&&p| p == 0).count();
+                                    let wc = pix.iter().filter(|&&p| p == 255).count();
+                                    let gc = pix.iter().filter(|&&p| p == 128).count();
+                                    eprintln!("    black={}, white={}, gray={}, arena={}", bc, wc, gc, arena.nodes.len());
+                                    let fname = format!("{}_depth{}_128x128.pgm", img_path, depth);
+                                    write_pgm(&fname, 128, 128, &pix);
+                                    eprintln!("    Saved: {}", fname);
+                                    if arena.nodes.len() > 480_000_000 {
+                                        eprintln!("    Arena too large, stopping at depth {}", depth);
+                                        break;
+                                    }
+                                }
                             }
                             _ => {
                                 eprintln!("OUTPUT with unknown p2={:?}", p2);
