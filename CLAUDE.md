@@ -22,7 +22,7 @@
 ## ファイル構成
 ```
 very_large_txt/stars_compact.txt  — コンパクト形式 (30,485,221 bytes)
-ski_eval_rs/src/main.rs           — Rust SKI評価器（メイン、~3200行）
+ski_eval_rs/src/main.rs           — Rust SKI評価器（メイン、~5800行）
 analysis_charcode.md              — 文字コード解析メモ
 scripts/                          — Python/JS解析スクリプト群
   ski_eval.py                     — Python版SKI評価器
@@ -32,7 +32,10 @@ send/send.js                      — 他プレイヤーのサーバー提出ス
 extracted/left_x.txt              — LEFT部のコンパクト表現
 reference/hint-new.md             — 最新GMヒント
 reference/                        — その他ヒント・解析文書
-images/                           — レンダリング出力
+images/                           — レンダリング出力（PGM形式）
+png/                              — PNG画像（スケール済み+コンポジットシート）
+extracted/x_arg0-4.txt            — デコーダー演算子のlambda decompile
+extracted/data_items/elem_*.txt   — item_09の各要素
 ```
 
 ## ビルドと実行
@@ -368,12 +371,23 @@ PXzn-wn-=20, ..., PXzn-wn-zPQ=24
 
 → 深さ10以降で非自明なパターンあり
 
-#### 現在のレンダリング状況（2026-02-18 17:35実行開始）
-- 実行コマンド: `--fuel 2000000000 --decode io --key 5,0,17,5,3 --img images/zoom`
-- Phase 1: depth 1-6完了（全て真っ黒 = 正常、GMヒント通り）
-- Phase 1: depth 7 (64x64) レンダリング中
-- Arena: 31,842,011ノードで安定（checkpoint/restoreが正常動作）
-- Phase 2 (depth 9-25の中央ズーム) は未着手
+#### レンダリング完了分
+- **4x4**: depth 9-25 全完了（checkpoint/restoreベース）
+- **8x8**: depth 9-15 完了（depth 16+ はOOM）
+- **PNG変換済み**: `png/` フォルダにスケール画像+コンポジットシート
+
+#### 128x128レンダリング: OOM問題（未解決）
+- **タイルレンダリング実装済み**: snapshot/restore方式（main.rs L3700-3940）
+  - `arena.nodes.clone().into_boxed_slice()` でスナップショット
+  - タイル毎にスナップショットから復元 → 8x8ピクセル評価
+  - tile_sz=8, render_sz=128 (16×16タイル)
+- **OOM発生**: aggressive GC後のarenaが123M slots（32M live + 91M free）
+  - snapshot clone = 123M × 12B = ~1.5GB → メモリ割当失敗
+  - エラー: "memory allocation of 2147483648 bytes failed"
+- **必要な修正: Compacting GC**
+  - GC後にliveノードをarena先頭に詰め直し、全参照(a,b)を付け替え、Vec縮小
+  - 123M → 32M nodes (1.5GB → 384MB) でsnapshot可能に
+  - forwarding table (old_idx → new_idx) で参照更新
 
 ---
 
@@ -461,11 +475,20 @@ Index 3+: 自己参照（SE象限への再帰）
 #### 演算子のテスト結果（codex確認済み）
 | 演算子 | サイズ | 動作 |
 |--------|--------|------|
-| arg0 (20K) | 2引数 | 等値系: (0,0)→0, (1,1)→I, (a,a)→I, (a≠b)→0 |
-| arg1 (10K) | 2引数 | XOR系: (0,0)→true, (1,0)→1, (1,1)→false |
+| arg0 (20K) | 2引数 | 等値パス: if a==b { a } else { 0 } |
+| arg1 (10K) | 2引数 | XOR: a ^ b |
 | arg2 (243) | 1引数 | 数値→数値変換 |
-| arg3 (57) | 2引数 | 比較/条件: `λx1.λx2. x1(λx7. x7 false true x2) x2` |
+| arg3 (57) | 2引数 | LSB条件分岐: `λx1.λx2. x1(λx7. x7 false true x2) x2` |
 | arg4 (30K) | 2引数 | 複雑な二項演算 |
+
+#### 再帰セクションの正体（codex解析済み）
+7つの再帰セクションはすべて**bit-serial adder**（wrapping_add相当）:
+- 6引数関数: `x88(x89, x90, x91, x92, x93)`
+  - x89, x90: sign extension bits
+  - x91: carry/borrow state (1-bit)
+  - x92, x93: 2つの数値引数（pair2/nil destructure）
+- carry伝搬あり、2の補数ビット列を1ビットずつ処理
+- top-level: x3がdiamond各フィールドに適用 → step(step(step(data, 2048), 256), 32)
 
 #### elem[0-2]の差分
 3つのデータ関数は>99.97%のノードを共有:
@@ -486,10 +509,9 @@ Index 3+: 自己参照（SE象限への再帰）
 5. 検証順: 4x4完全一致 → 8x8 → 128x128
 
 ### ブルートフォースの限界（確定）
-- **8x8 depth 16**: ARENA LIMIT (1.4B nodes) → **OOM確定**
-- **16x16**: 1ピクセル~45秒 → 256px × 17depths ≈ 54時間
-- **128x128**: 完全に非現実的
-→ **ネイティブデコーダーが必須**
+- **8x8 depth 16**: ARENA LIMIT (1.4B nodes) → **OOM確定**（checkpoint/restore方式）
+- **128x128 snapshot方式**: compacting GC未実装でOOM → **compacting GC実装で解決見込み**
+- **16x16以上**: ネイティブデコーダーが理想だが、snapshot/restore + compacting GCでも可能性あり
 
 ---
 
@@ -521,6 +543,11 @@ Index 3+: 自己参照（SE象限への再帰）
 - [x] **OOM対策** — mark-sweep GC + checkpoint/restore機構実装
 - [x] **デコーダー解析** — left_x構造解明、演算子テスト、elem[0-2]差分特定
 - [x] **ブルートフォース限界確認** — 8x8 depth16+ OOM確定、ネイティブ必須
-- [ ] **ネイティブデコーダー実装** — 型付きIRベースの高速デコード
-- [ ] **128x128画像レンダリング** — ネイティブデコーダーで全depth
+- [x] **codex解析: 再帰セクション** — bit-serial adder (wrapping_add)、arg0=等値パス、arg1=XOR
+- [x] **低解像度レンダリング完了** — 4x4 d9-25全完了、8x8 d9-15完了
+- [x] **PNG変換** — png/フォルダにスケール画像+コンポジットシート
+- [x] **128x128タイルレンダリング実装** — snapshot/restore方式のコード完成
+- [ ] **Compacting GC実装** — arena圧縮でsnapshot用メモリ削減（123M→32M nodes）
+- [ ] **128x128画像レンダリング** — compacting GC後にsnapshot/restoreで全depth
+- [ ] **（代替）ネイティブデコーダー実装** — 型付きIRベースの高速デコード
 - [ ] 最終回答導出

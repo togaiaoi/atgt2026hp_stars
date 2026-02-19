@@ -18,25 +18,44 @@
 9. **低解像度レンダリング成功**:
    - 4x4: depth 9-25 全て完了（全depthでパターンあり）
    - 8x8: depth 9-15 完了（depth 16でOOM — 中間depthのレンダリング汚染が原因）
+   - PNG変換済み: `png/` フォルダに4x4全depth・8x8 d9-15のスケール画像+コンポジットシート
 
 ### 完了: デコーダー（left_x）解析
 10. **left_x構造解明**: 153K charsの完全評価済みquadtree。7つのY-combinator再帰セクション
-   - COND(32%), NW(16%), NE(0.4%), SW(0.05%=座標反射), SE(51%=メイン)
-   - 末尾定数: `step(step(step(data, 2048), 256), 32)` で24段ズーム生成
-   - 各セクションが `result(0)(0)(0)(前セクション)(1)` でチェーン
+    - COND(32%), NW(16%), NE(0.4%), SW(0.05%=座標反射), SE(51%=メイン)
+    - 末尾定数: `step(step(step(data, 2048), 256), 32)` で24段ズーム生成
+    - 各セクションが `result(0)(0)(0)(前セクション)(1)` でチェーン
 11. **演算子テスト**: arg0=等値系, arg1=XOR系, arg3=比較条件
 12. **elem[0-2]差分**: >99.97%共有、判別子(K/K(K(I))/I)と副フラグのみ異なる
 13. **ブルートフォース限界確認**: 8x8 depth16で1.4B nodes OOM、ネイティブ必須
 
-### 現在進行中: ネイティブデコーダー実装
-- codex推奨: SKI直訳せず、型付きIR（Bool/Num/Pair/Quad）へ変換
-- 画像はフラクタルではなくテーブル/ビットストリーム駆動のquadtreeデコーダ
-- 検証順: 4x4完全一致 → 8x8 → 128x128
+### 完了: Codex解析結果（再帰セクション=ビットシリアル加算器）
+14. **再帰関数の構造**: 6引数関数（x88 x89 x90 x91 x92 x93）
+    - x91 = carry/borrow state（1ビット）
+    - x92, x93 = 2つの数値引数（pair2/nilとしてdestructure）
+    - 再帰呼出: `x88 x97 x102 x181 x98 x103`
+15. **演算子の正体（codex確認）**:
+    - arg0(a,b) = if a==b { a } else { 0 }（等値パス）
+    - arg1(a,b) = a ^ b（XOR）
+    - arg3(x1,x2) = LSB条件分岐: `λx1.λx2. x1(λx7. x7 false true x2) x2`
+16. **全体構造**: bit-serial adder（wrapping_add相当）
+
+### 128x128レンダリング: OOM問題（未解決）
+17. **Rustタイルレンダリング**: 実装完了済み（snapshot/restore方式）
+    - `arena.nodes.clone().into_boxed_slice()` でスナップショット
+    - タイル毎にスナップショットから復元 → 8x8ピクセル評価
+18. **OOM発生**: aggressive GC後のarenaが123M slots（32M live + 91M free）
+    - snapshotがALL 123M nodesをclone → ~1.5GB
+    - 元arenaと合わせてメモリ割当失敗（"memory allocation of 2147483648 bytes failed"）
+19. **必要な修正: Compacting GC**
+    - GC後にlive nodesをarena先頭に詰め直し、参照を付け替え、Vecを縮小
+    - 123M → 32M nodes（1.5GB → 384MB）でsnapshot可能に
 
 ### 残りのステップ
-1. **ネイティブデコーダーのRust実装** — 型付きIRベースの高速デコード
-2. **128x128レンダリング** — 全17 depth (9-25) を128x128で
-3. **最終回答を画像から読み取る**
+1. **Compacting GC実装** — arenaのliveノード圧縮でsnapshot用メモリ削減
+2. **128x128レンダリング** — compacting GC後に全17 depth (9-25) を128x128で
+3. **（代替）ネイティブデコーダーのRust実装** — 型付きIRベースの高速デコード
+4. **最終回答を画像から読み取る**
 
 ## 鍵検証の詳細
 
@@ -83,18 +102,23 @@ cd ski_eval_rs && PATH="/c/Users/mizuki/.cargo/bin:$PATH" cargo build --release
 - 実装が極めてシンプル（clone + 代入）
 - 復元コスト: ~384MB memcpy ≈ 50-100ms（タイル評価の秒単位に比べ無視可能）
 
-#### メモリ見積もり
-- ベースarena（ズーム後GC済み）: ~32M nodes = ~384MB
+#### メモリ見積もり（Compacting GC適用後）
+- ベースarena（ズーム後GC→compact済み）: ~32M nodes = ~384MB
 - snapshot用バッファ: ~384MB
 - タイル評価中のピーク: ~650M nodes = ~7.8GB
 - **合計ピーク: ~8.5GB**（32GBに余裕で収まる）
+
+#### ⚠ 現状の問題: Compacting GC未実装
+- aggressive GC後もarenaは123M slots（32M live + 91M dead）
+- snapshot clone = 123M × 12B = ~1.5GB → メモリ割当失敗
+- **Compacting GC実装が必須**: liveノードをarena先頭に移動、全参照を更新、Vec縮小
 
 #### アルゴリズム
 ```
 1. I/O Step 4で画像データ(data)を取得
 2. dataからルート子ノード(TL,TR,BL,BR)を抽出
 3. 7段のズーム（中央象限選択）で対象depthのサブツリーに到達
-4. aggressive GC → ~32M live nodes
+4. aggressive GC → compacting GC → ~32M live nodes, Vec縮小
 5. snapshot = arena.nodes.clone()  // ~384MB
 6. for each depth in 9..=25:
      for tile_row in 0..16:
@@ -171,6 +195,38 @@ sel_4 = K(K(K(K(I))))                  → QD (SE) を抽出
 | 24 | FTTT | 4/12 | ..## ..## #### #### |
 | 25 | FTTT | 4/12 | ..## ..## #### #### |
 
+#### 8x8（depth 9-15完了）
+- PGM画像: `images/zoom8x8_depth{9-15}.pgm`
+- PNG画像: `png/zoom8x8_depth{9-15}_8x8.png`（128x128にスケール済み）
+- コンポジットシート: `png/composite_8x8_depths9-15.png`
+
+## Codex解析: 再帰セクションの詳細
+
+### 再帰関数の6引数
+```
+x88(x89, x90, x91, x92, x93)
+  x89, x90: sign extension bits
+  x91: carry/borrow state (1-bit)
+  x92: 第1数値引数 (pair2/nil destructure)
+  x93: 第2数値引数 (pair2/nil destructure)
+```
+
+### 演算の概要
+- bit-serial adder: 2つの2の補数ビット列を1ビットずつ処理
+- carry伝搬あり
+- wrapping_add相当の演算
+
+### Rustでの擬似コード
+```rust
+fn section_add_i64(a: i64, b: i64) -> i64 {
+    a.wrapping_add(b)
+}
+```
+
+### top-level構造
+- x3（最外関数）がdiamond 5-tupleの各フィールドに適用
+- 最終段: `step(step(step(data, 2048), 256), 32)` で24段のズームレベル
+
 ## 全文字コード対応表
 ```
 コード →  表示文字
@@ -201,4 +257,4 @@ sel_4 = K(K(K(K(I))))                  → QD (SE) を抽出
 | `scripts/charcode_query.js` | 文字コード問い合わせスクリプト |
 | `send/send.js` | サーバー提出スクリプト（他プレイヤー作） |
 | `images/` | レンダリング出力（PGM形式） |
-| `png/` | 意味のある画像をPNG形式で保存 |
+| `png/` | PNG形式の画像（スケール済み+コンポジット） |

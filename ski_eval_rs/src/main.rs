@@ -57,9 +57,10 @@ impl Arena {
                 return idx;
             }
         }
-        // Arena size limit: must be <= initial capacity to prevent Vec doubling
-        if self.nodes.len() >= 1_400_000_000 {
-            eprintln!("ARENA LIMIT: {} nodes reached, aborting", self.nodes.len());
+        // Arena size limit: prevent runaway growth
+        if self.nodes.len() >= self.nodes.capacity() {
+            eprintln!("ARENA LIMIT: {} nodes (capacity {}) reached, aborting",
+                self.nodes.len(), self.nodes.capacity());
             std::process::exit(1);
         }
         let idx = self.nodes.len() as u32;
@@ -148,6 +149,71 @@ impl Arena {
         }
         let freed = len - live;
         (len, live, freed)
+    }
+
+    /// Compacting GC: remap all live nodes to contiguous [0..live_count),
+    /// then truncate the Vec. All external indices in `ext_roots` are updated.
+    /// Returns the old length (for diagnostics).
+    fn compact(&mut self, ext_roots: &mut [u32]) -> usize {
+        let len = self.nodes.len();
+        // Build is_live set from free_list
+        let mut is_dead = vec![false; len];
+        for &idx in &self.free_list {
+            is_dead[idx as usize] = true;
+        }
+
+        // Build remap table: old_idx -> new_idx
+        let mut remap = vec![NIL; len];
+        let mut new_idx = 0u32;
+        for i in 0..len {
+            if !is_dead[i] {
+                remap[i] = new_idx;
+                new_idx += 1;
+            }
+        }
+        let live_count = new_idx as usize;
+        eprintln!("  Compact: {} -> {} nodes ({:.1} MB -> {:.1} MB)",
+            len, live_count, len as f64 * 12.0 / 1_000_000.0,
+            live_count as f64 * 12.0 / 1_000_000.0);
+
+        // Copy live nodes to new Vec with remapped references
+        let mut new_nodes = Vec::with_capacity(live_count);
+        for i in 0..len {
+            if !is_dead[i] {
+                let mut node = self.nodes[i];
+                if node.a != NIL {
+                    let a = node.a as usize;
+                    if a < len { node.a = remap[a]; }
+                }
+                if node.b != NIL {
+                    let b = node.b as usize;
+                    if b < len { node.b = remap[b]; }
+                }
+                new_nodes.push(node);
+            }
+        }
+
+        // Replace arena
+        self.nodes = new_nodes;
+        self.free_list.clear();
+
+        // Remap gc_roots
+        for r in self.gc_roots.iter_mut() {
+            if *r != NIL {
+                let old = *r as usize;
+                if old < len { *r = remap[old]; }
+            }
+        }
+
+        // Remap external roots
+        for r in ext_roots.iter_mut() {
+            if *r != NIL {
+                let old = *r as usize;
+                if old < len { *r = remap[old]; }
+            }
+        }
+
+        len
     }
 
     #[inline]
@@ -827,7 +893,7 @@ fn main() {
     } else if decode_mode == "examine-image" || decode_mode == "analyze" {
         200_000_000usize  // 200M × 12B = 2.4GB (I/O flow + analysis)
     } else {
-        1_500_000_000usize  // 1.5B × 12B = 18GB (for full rendering)
+        200_000_000usize  // 200M × 12B = 2.4GB (reduced to fit snapshot in RAM)
     };
     let mut arena = Arena::new(estimated_nodes);
 
@@ -3539,7 +3605,7 @@ fn main() {
                                     eprintln!("  Post-trace GC: total={} live={} freed={}", total, live, freed);
                                 }
                                 // Pre-build selectors once
-                                let sels: [u32; 5] = [
+                                let mut sels: [u32; 5] = [
                                     build_diamond_sel(&mut arena, 0),
                                     build_diamond_sel(&mut arena, 1),
                                     build_diamond_sel(&mut arena, 2),
@@ -3676,19 +3742,23 @@ fn main() {
                                                 0 => black += 1,
                                                 _ => gray += 1,
                                             }
+
+                                            // Per-pixel GC when free list runs low
+                                            if arena.free_list.len() < 50_000_000 || arena.nodes.len() > 600_000_000 {
+                                                let mut roots: Vec<u32> = Vec::new();
+                                                for &s in sels { roots.push(s); }
+                                                for &r in &sub_roots { roots.push(r); }
+                                                roots.extend_from_slice(gc_extra_roots);
+                                                let (total, live, freed) = arena.gc(&roots);
+                                                if col == 0 || total > 500_000_000 {
+                                                    eprintln!("      GC@({},{}): total={}, live={}, freed={}, free={}",
+                                                        row, col, total, live, freed, arena.free_list.len());
+                                                }
+                                            }
                                         }
                                         if (row + 1) % 8 == 0 || row == size - 1 {
                                             eprintln!("      Row {}/{}: B={} W={} G={} arena={} free={}",
                                                 row + 1, size, black, white, gray, arena.nodes.len(), arena.free_list.len());
-                                        }
-                                        // GC when free list runs low OR arena grows too large
-                                        if arena.free_list.len() < 100_000_000 || arena.nodes.len() > 800_000_000 {
-                                            let mut roots: Vec<u32> = Vec::new();
-                                            for &s in sels { roots.push(s); }
-                                            for &r in &sub_roots { roots.push(r); }
-                                            roots.extend_from_slice(gc_extra_roots);
-                                            let (total, live, freed) = arena.gc(&roots);
-                                            eprintln!("      GC: total={}, live={}, freed={}, free={}", total, live, freed, arena.free_list.len());
                                         }
                                     }
                                     pixels
@@ -3763,7 +3833,7 @@ fn main() {
 
                                 // Render target size: configurable via --grid (default 128)
                                 let render_sz: usize = if grid_size > 0 { grid_size as usize } else { 128 };
-                                let tile_sz: usize = 8;
+                                let tile_sz: usize = if render_sz <= 32 { render_sz } else { 8 };
                                 eprintln!("  Render size: {}x{}, tile_sz={}", render_sz, render_sz, tile_sz);
                                 // The zoom root already splits into 4 quadrants (1 level)
                                 // So from each quadrant we need 6 more levels of navigation
@@ -3800,136 +3870,110 @@ fn main() {
                                         continue;
                                     }
 
-                                    let full_image;
+                                    // --- PER-PIXEL CHECKPOINT/RESTORE RENDERER ---
+                                    // Each pixel: set_checkpoint → navigate → extract COND → restore
+                                    // Memory stays bounded at base + per-pixel overhead
 
-                                    if render_sz <= tile_sz {
-                                        // --- SMALL RENDER: direct render_shared, no tiling ---
-                                        eprintln!("    Direct render (no tiling): {}x{}", render_sz, render_sz);
-                                        let pix = render_shared(
-                                            &mut arena,
-                                            [zoom_tl, zoom_tr, zoom_bl, zoom_br],
-                                            render_sz, &sels, eval_fuel,
-                                            &[zoom_tl, zoom_tr, zoom_bl, zoom_br],
-                                            1_900_000_000
-                                        );
-                                        full_image = pix;
-                                    } else {
-                                    // --- TILED RENDERING with snapshot/restore ---
-                                    let snapshot_nodes: Box<[Node]> = arena.nodes.clone().into_boxed_slice();
-                                    let snapshot_free_list: Box<[u32]> = arena.free_list.clone().into_boxed_slice();
-                                    let snapshot_zoom = [zoom_tl, zoom_tr, zoom_bl, zoom_br];
-                                    let snapshot_sels = sels.clone();
-                                    let snapshot_len = snapshot_nodes.len();
-                                    eprintln!("    Snapshot taken: {} nodes ({:.1} MB)",
-                                        snapshot_len, snapshot_len as f64 * 12.0 / 1_000_000.0);
+                                    // Compact arena to minimize base size before per-pixel rendering
+                                    {
+                                        let mut ext_roots: Vec<u32> = Vec::new();
+                                        ext_roots.extend_from_slice(&[zoom_tl, zoom_tr, zoom_bl, zoom_br]);
+                                        ext_roots.extend_from_slice(&sels);
+                                        arena.compact(&mut ext_roots);
+                                        zoom_tl = ext_roots[0]; zoom_tr = ext_roots[1];
+                                        zoom_bl = ext_roots[2]; zoom_br = ext_roots[3];
+                                        sels = [ext_roots[4], ext_roots[5], ext_roots[6], ext_roots[7], ext_roots[8]];
+                                        // Reserve capacity: ~32M base + ~200M per pixel = 400M
+                                        let target_cap = 400_000_000usize;
+                                        if arena.nodes.capacity() < target_cap {
+                                            arena.nodes.reserve(target_cap - arena.nodes.len());
+                                        }
+                                        eprintln!("    Compacted to {} nodes, capacity {}",
+                                            arena.nodes.len(), arena.nodes.capacity());
+                                    }
 
+                                    eprintln!("    Per-pixel checkpoint/restore render: {}x{}", render_sz, render_sz);
+                                    let half = render_sz / 2;
+                                    let nav_depth = if half <= 1 { 0 } else {
+                                        (half as f64).log2() as usize
+                                    };
                                     let mut img = vec![0u8; render_sz * render_sz];
+                                    let mut pixel_count = 0usize;
+                                    let total_pixels = render_sz * render_sz;
+                                    let start_time = std::time::Instant::now();
 
-                                    let quadrant_sz = render_sz / 2;
-                                    let tiles_per_quadrant = quadrant_sz / tile_sz;
-                                    let nav_levels = if tiles_per_quadrant > 1 {
-                                        (tiles_per_quadrant as f64).log2() as usize
-                                    } else { 0 };
+                                    for row in 0..render_sz {
+                                        for col in 0..render_sz {
+                                            // Select quadrant
+                                            let qi = if row < half {
+                                                if col < half { 0 } else { 1 }
+                                            } else {
+                                                if col < half { 2 } else { 3 }
+                                            };
+                                            let q_root = [zoom_tl, zoom_tr, zoom_bl, zoom_br][qi];
+                                            let mut local_row = if row < half { row } else { row - half };
+                                            let mut local_col = if col < half { col } else { col - half };
+                                            let mut local_size = half;
 
-                                    let mut tile_count = 0usize;
-                                    let total_tiles = (render_sz / tile_sz) * (render_sz / tile_sz);
-                                    eprintln!("    Tiles: {} ({}x{} per quadrant, nav_levels={})",
-                                        total_tiles, tiles_per_quadrant, tiles_per_quadrant, nav_levels);
+                                            // Checkpoint: save arena state
+                                            arena.set_checkpoint();
 
-                                    for qi in 0..4usize {
-                                        let q_row_off = if qi >= 2 { quadrant_sz } else { 0 };
-                                        let q_col_off = if qi == 1 || qi == 3 { quadrant_sz } else { 0 };
-
-                                        for tr in 0..tiles_per_quadrant {
-                                            for tc in 0..tiles_per_quadrant {
-                                                // Restore snapshot
-                                                arena.nodes.truncate(snapshot_len);
-                                                arena.nodes[..snapshot_len].copy_from_slice(&snapshot_nodes);
-                                                arena.free_list.clear();
-                                                arena.free_list.extend_from_slice(&snapshot_free_list);
-                                                arena.checkpoint = None;
-                                                arena.saved_nodes.clear();
-
-                                                let zoom_roots = snapshot_zoom;
-                                                let q_root = zoom_roots[qi];
-
-                                                let mut node = q_root;
-                                                let mut local_row = tr * tile_sz;
-                                                let mut local_col = tc * tile_sz;
-                                                let mut local_size = quadrant_sz;
-
-                                                for _nav in 0..nav_levels {
-                                                    let lh = local_size / 2;
-                                                    let child_idx = if local_row < lh {
-                                                        if local_col < lh { 1 } else { 2 }
-                                                    } else {
-                                                        if local_col < lh { 3 } else { 4 }
-                                                    };
-                                                    let app = arena.alloc(APP, node, snapshot_sels[child_idx]);
-                                                    let mut f = eval_fuel;
-                                                    arena.whnf(app, &mut f);
-                                                    node = arena.follow(app);
-                                                    if local_row >= lh { local_row -= lh; }
-                                                    if local_col >= lh { local_col -= lh; }
-                                                    local_size = lh;
-                                                }
-
-                                                let tile_tl = {
-                                                    let app = arena.alloc(APP, node, snapshot_sels[1]);
-                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
+                                            // Navigate to pixel through quadtree
+                                            let mut node = q_root;
+                                            let mut ok = true;
+                                            for _level in 0..nav_depth {
+                                                let lh = local_size / 2;
+                                                let child_idx = if local_row < lh {
+                                                    if local_col < lh { 1 } else { 2 }
+                                                } else {
+                                                    if local_col < lh { 3 } else { 4 }
                                                 };
-                                                let tile_tr = {
-                                                    let app = arena.alloc(APP, node, snapshot_sels[2]);
-                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
-                                                };
-                                                let tile_bl = {
-                                                    let app = arena.alloc(APP, node, snapshot_sels[3]);
-                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
-                                                };
-                                                let tile_br = {
-                                                    let app = arena.alloc(APP, node, snapshot_sels[4]);
-                                                    let mut f = eval_fuel; arena.whnf(app, &mut f); arena.follow(app)
-                                                };
+                                                let app = arena.alloc(APP, node, sels[child_idx]);
+                                                let mut f = eval_fuel;
+                                                arena.whnf(app, &mut f);
+                                                if f == 0 { ok = false; break; }
+                                                node = arena.follow(app);
+                                                if local_row >= lh { local_row -= lh; }
+                                                if local_col >= lh { local_col -= lh; }
+                                                local_size = lh;
+                                            }
 
-                                                let pix = render_shared(
-                                                    &mut arena,
-                                                    [tile_tl, tile_tr, tile_bl, tile_br],
-                                                    tile_sz, &snapshot_sels, eval_fuel,
-                                                    &[tile_tl, tile_tr, tile_bl, tile_br],
-                                                    1_900_000_000
-                                                );
-
-                                                let img_row_off = q_row_off + tr * tile_sz;
-                                                let img_col_off = q_col_off + tc * tile_sz;
-                                                for py in 0..tile_sz {
-                                                    for px in 0..tile_sz {
-                                                        img[(img_row_off + py) * render_sz + (img_col_off + px)]
-                                                            = pix[py * tile_sz + px];
+                                            // Extract COND value
+                                            let pixel_val = if ok {
+                                                let app = arena.alloc(APP, node, sels[0]);
+                                                let mut f = eval_fuel;
+                                                arena.whnf(app, &mut f);
+                                                if f == 0 {
+                                                    128u8
+                                                } else {
+                                                    let cond = arena.follow(app);
+                                                    match decode_bool(&mut arena, cond, eval_fuel) {
+                                                        Some(true) => 255u8,
+                                                        Some(false) => 0u8,
+                                                        None => 128u8,
                                                     }
                                                 }
+                                            } else { 128u8 };
 
-                                                tile_count += 1;
-                                                if tile_count % 4 == 0 || tile_count == total_tiles {
-                                                    let bc = img.iter().filter(|&&p| p == 0).count();
-                                                    let wc = img.iter().filter(|&&p| p == 255).count();
-                                                    let gc = img.iter().filter(|&&p| p == 128).count();
-                                                    eprintln!("    Tile {}/{}: arena_peak={} B={} W={} G={}",
-                                                        tile_count, total_tiles, arena.nodes.len(), bc, wc, gc);
-                                                }
+                                            img[row * render_sz + col] = pixel_val;
+
+                                            // Restore checkpoint: undo all modifications
+                                            arena.restore_checkpoint();
+
+                                            pixel_count += 1;
+                                            if pixel_count % 64 == 0 || pixel_count == total_pixels {
+                                                let elapsed = start_time.elapsed().as_secs();
+                                                let rate = if elapsed > 0 { pixel_count as f64 / elapsed as f64 } else { 0.0 };
+                                                let remaining = if rate > 0.0 { (total_pixels - pixel_count) as f64 / rate } else { 0.0 };
+                                                let bc = img.iter().filter(|&&p| p == 0).count();
+                                                let wc = img.iter().filter(|&&p| p == 255).count();
+                                                eprintln!("    Pixel {}/{}: arena={} B={} W={} rate={:.1}px/s ETA={:.0}s",
+                                                    pixel_count, total_pixels, arena.nodes.len(),
+                                                    bc, wc, rate, remaining);
                                             }
                                         }
                                     }
-
-                                    // Restore snapshot for next depth's zoom step
-                                    arena.nodes.truncate(snapshot_len);
-                                    arena.nodes[..snapshot_len].copy_from_slice(&snapshot_nodes);
-                                    arena.free_list.clear();
-                                    arena.free_list.extend_from_slice(&snapshot_free_list);
-                                    arena.checkpoint = None;
-                                    arena.saved_nodes.clear();
-
-                                    full_image = img;
-                                    } // end tiled rendering
+                                    let full_image = img;
 
                                     let bc = full_image.iter().filter(|&&p| p == 0).count();
                                     let wc = full_image.iter().filter(|&&p| p == 255).count();
